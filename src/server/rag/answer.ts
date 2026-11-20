@@ -6,7 +6,7 @@ import { estimateChatCost, estimateEmbeddingCost } from "../ai/models";
 import { chatCandidates, type ProviderRegistry } from "../ai/registry";
 import { estimateTokens, type ChatMessage } from "../ai/types";
 import type { Logger } from "../logger";
-import { AnswerGate, buildMessages, buildSystemPrompt, containsNoAnswer, extractCitations, retrievalQuery, sanitizeCitations, wantsHuman } from "./prompt";
+import { AnswerGate, buildMessages, buildSystemPrompt, containsNoAnswer, extractCitations, retrievalQueries, sanitizeCitations, wantsHuman } from "./prompt";
 import { retrieve } from "./retrieve";
 
 export type Outcome = "answered" | "low_confidence" | "no_answer" | "handoff" | "error" | "not_indexed";
@@ -80,8 +80,8 @@ export async function answerQuestion(p: AnswerParams): Promise<{ messageId: stri
   } else {
     let ctx: Awaited<ReturnType<typeof retrieve>> | undefined;
     try {
-      const query = retrievalQuery(p.question, p.history);
-      const emb = await embeddings.embed([query], p.signal);
+      const queries = retrievalQueries(p.question, p.history);
+      const emb = await embeddings.embed(queries, p.signal);
       await db.insert(usageEvents).values({
         botId: bot.id,
         kind: "embedding",
@@ -94,8 +94,8 @@ export async function answerQuestion(p: AnswerParams): Promise<{ messageId: stri
       ctx = await retrieve(db, {
         botId: bot.id,
         embeddingModel: embeddings.model,
-        queryVector: emb.vectors[0]!,
-        queryText: p.question,
+        queryVectors: emb.vectors,
+        queryText: queries.at(-1)!,
         topK: bot.topK,
         minSimilarity: bot.minSimilarity,
       });

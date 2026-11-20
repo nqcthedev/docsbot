@@ -71,7 +71,7 @@ describe("retrieve() against Postgres + pgvector (PGlite)", () => {
 
   it("ranks the matching chunk first and reports confidence", async () => {
     const [q] = (await emb.embed(["shipping to canada"])).vectors;
-    const r = await retrieve(db, { botId, embeddingModel: "test-embedding", queryVector: q!, queryText: "shipping to canada", topK: 3, minSimilarity: 0.5 });
+    const r = await retrieve(db, { botId, embeddingModel: "test-embedding", queryVectors: [q!], queryText: "shipping to canada", topK: 3, minSimilarity: 0.5 });
     expect(r.confidence.confident).toBe(true);
     expect(r.chunks[0]!.content).toContain("$16 flat");
     expect(r.chunks[0]!.title).toBe("Help Center");
@@ -79,13 +79,13 @@ describe("retrieve() against Postgres + pgvector (PGlite)", () => {
 
   it("is not confident for unrelated questions", async () => {
     const [q] = (await emb.embed(["do you sell teapots"])).vectors;
-    const r = await retrieve(db, { botId, embeddingModel: "test-embedding", queryVector: q!, queryText: "do you sell teapots", topK: 3, minSimilarity: 0.5 });
+    const r = await retrieve(db, { botId, embeddingModel: "test-embedding", queryVectors: [q!], queryText: "do you sell teapots", topK: 3, minSimilarity: 0.5 });
     expect(r.confidence.confident).toBe(false);
   });
 
   it("never compares vectors produced by a different embedding model", async () => {
     const [q] = (await emb.embed(["shipping canada"])).vectors;
-    const r = await retrieve(db, { botId, embeddingModel: "some-other-model", queryVector: q!, queryText: "zzz", topK: 3, minSimilarity: 0.1 });
+    const r = await retrieve(db, { botId, embeddingModel: "some-other-model", queryVectors: [q!], queryText: "zzz", topK: 3, minSimilarity: 0.1 });
     expect(r.chunks).toEqual([]);
     expect(r.confidence.confident).toBe(false);
   });

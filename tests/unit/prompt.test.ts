@@ -6,7 +6,7 @@ import {
   buildSystemPrompt,
   containsNoAnswer,
   extractCitations,
-  retrievalQuery,
+  retrievalQueries,
   sanitizeCitations,
   wantsHuman,
 } from "@/server/rag/prompt";
@@ -52,7 +52,7 @@ describe("buildSystemPrompt", () => {
   });
 });
 
-describe("buildMessages / retrievalQuery", () => {
+describe("buildMessages / retrievalQueries", () => {
   it("keeps a bounded history that starts with a user turn", () => {
     const history = [
       { role: "assistant" as const, content: "Welcome!" },
@@ -65,11 +65,12 @@ describe("buildMessages / retrievalQuery", () => {
     expect(buildMessages(Array.from({ length: 20 }, (_, i) => ({ role: i % 2 ? ("assistant" as const) : ("user" as const), content: "x".repeat(5000) })), "q", 4, 100).every((m) => m.content.length <= 100)).toBe(true);
   });
 
-  it("adds the previous question to short follow-ups only", () => {
+  it("also searches with the previous question for follow-ups only", () => {
     const history = [{ role: "user" as const, content: "Do you ship to Canada?" }];
-    expect(retrievalQuery("How long?", history)).toBe("Do you ship to Canada?\nHow long?");
-    expect(retrievalQuery("What are your café opening hours on weekends please?", history)).toBe("What are your café opening hours on weekends please?");
-    expect(retrievalQuery("How long?", [])).toBe("How long?");
+    expect(retrievalQueries("How long?", history)).toEqual(["How long?", "Do you ship to Canada?\nHow long?"]);
+    expect(retrievalQueries("And how long does it take to arrive at my door?", history)).toHaveLength(2);
+    expect(retrievalQueries("What are your café opening hours on weekends please?", history)).toEqual(["What are your café opening hours on weekends please?"]);
+    expect(retrievalQueries("How long?", [])).toEqual(["How long?"]);
   });
 });
 

@@ -35,7 +35,7 @@ export default async function BotOverview({ params }: { params: Promise<{ botId:
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
         <Tile icon={<MessageSquare />} label="Conversations" value={formatNumber(a.conversations)} sub={`last ${a.days} days`} />
         <Tile icon={<Sparkles />} label="Answer rate" value={a.answerRate === null ? "—" : `${Math.round(a.answerRate * 100)}%`} sub={`${formatNumber(a.answered)} of ${formatNumber(a.replies)} replies`} />
-        <Tile icon={<CircleHelp />} label="Unanswered" value={formatNumber(a.unanswered)} sub={`${formatNumber(a.handoffs)} human handoffs`} />
+        <Tile icon={<CircleHelp />} label="Unanswered" value={formatNumber(a.unanswered)} sub="questions your docs don't cover" />
         <Tile icon={<Users />} label="Leads captured" value={formatNumber(a.leads)} sub="emails collected" />
         <Tile icon={<Wallet />} label="Est. AI cost" value={formatUsd(a.totalCost)} sub={`${formatNumber(a.totalTokens)} tokens`} />
       </div>

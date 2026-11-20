@@ -64,11 +64,9 @@ export function filterContext(results: RetrievedChunk[], minSimilarity: number, 
 
 export async function retrieve(
   db: Database,
-  params: { botId: string; embeddingModel: string; queryVector: number[]; queryText: string; topK: number; minSimilarity: number; candidates?: number },
+  params: { botId: string; embeddingModel: string; queryVectors: number[][]; queryText: string; topK: number; minSimilarity: number; candidates?: number },
 ): Promise<{ chunks: RetrievedChunk[]; confidence: Confidence }> {
   const limit = params.candidates ?? 20;
-  const vec = JSON.stringify(params.queryVector);
-  const distance = sql<number>`(${chunks.embedding} <=> ${vec}::vector)`;
   const base = {
     id: chunks.id,
     content: chunks.content,
@@ -79,13 +77,24 @@ export async function retrieve(
   };
   const scope = and(eq(chunks.botId, params.botId), eq(chunks.embeddingModel, params.embeddingModel));
 
-  const vectorRows = await db
-    .select({ ...base, similarity: sql<number>`1 - ${distance}` })
-    .from(chunks)
-    .innerJoin(documents, eq(documents.id, chunks.documentId))
-    .where(scope)
-    .orderBy(distance)
-    .limit(limit);
+  // One nearest-neighbour search per query vector; a chunk keeps its best similarity.
+  const best = new Map<string, Omit<RetrievedChunk, "score" | "keywordRank"> & { similarity: number }>();
+  for (const vector of params.queryVectors) {
+    const distance = sql<number>`(${chunks.embedding} <=> ${JSON.stringify(vector)}::vector)`;
+    const rows = await db
+      .select({ ...base, similarity: sql<number>`1 - ${distance}` })
+      .from(chunks)
+      .innerJoin(documents, eq(documents.id, chunks.documentId))
+      .where(scope)
+      .orderBy(distance)
+      .limit(limit);
+    for (const r of rows) {
+      const sim = Number(r.similarity);
+      const prev = best.get(r.id);
+      if (!prev || sim > prev.similarity) best.set(r.id, { ...r, similarity: sim });
+    }
+  }
+  const vectorHits = [...best.values()].sort((a, b) => b.similarity - a.similarity).slice(0, limit);
 
   const tsq = buildKeywordQuery(params.queryText);
   const keywordRows = tsq
@@ -98,14 +107,12 @@ export async function retrieve(
         .limit(limit)
     : [];
 
-  const vectorHits = vectorRows.map((r) => ({ ...r, similarity: Number(r.similarity) }));
   const confidence = assessConfidence(vectorHits, params.minSimilarity);
   const fused = fuseResults(
     vectorHits,
     keywordRows.map((r) => ({ ...r, keywordRank: Number(r.keywordRank) })),
     params.topK,
   );
-  // Fill in similarity for keyword-only hits that also appeared in the vector list.
   const simById = new Map(vectorHits.map((v) => [v.id, v.similarity]));
   for (const f of fused) if (f.similarity === null && simById.has(f.id)) f.similarity = simById.get(f.id)!;
   return { chunks: filterContext(fused, params.minSimilarity), confidence };
