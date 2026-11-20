@@ -295,4 +295,4 @@ Roadmap ideas: email/Slack lead alerts, scheduled re-syncs, a JS-rendering crawl
 
 ---
 
-Built by Cuong Nguyen — full stack & AI developer. Available for hire on Fiverr: https://www.fiverr.com/cuongnqxx
+Built by NQC The Dev — full stack & AI developer. Available for hire on Fiverr: https://www.fiverr.com/cuongnqxx
