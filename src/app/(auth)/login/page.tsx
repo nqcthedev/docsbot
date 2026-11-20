@@ -1,16 +1,18 @@
-import { redirect } from 'next/navigation';
+import { CONFIG } from 'src/config-global';
 
-import { LoginForm } from 'src/app/(auth)/auth-forms';
-import { getCurrentUser } from 'src/server/auth/session';
+import { LoginView } from 'src/auth/view';
+import { redirectIfAuthenticated } from 'src/auth/guard';
 
-export const metadata = { title: 'Log in' };
+// ----------------------------------------------------------------------
 
-export default async function LoginPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ next?: string }>;
-}) {
-  if (await getCurrentUser()) redirect('/dashboard');
+export const metadata = { title: `Log in · ${CONFIG.appName}` };
+
+type Props = {
+  searchParams: Promise<{ next?: string | string[] }>;
+};
+
+export default async function Page({ searchParams }: Props) {
+  await redirectIfAuthenticated();
   const { next } = await searchParams;
-  return <LoginForm next={next} />;
+  return <LoginView next={typeof next === 'string' ? next : undefined} />;
 }

@@ -1,41 +1,23 @@
-import { eq, desc } from 'drizzle-orm';
+import { listAllLeads } from 'src/server/data';
+import { leadsToCsv, leadsCsvFileName } from 'src/server/leads-csv';
 
-import { getDb } from 'src/server/db';
-import { requireBot } from 'src/server/data';
-import { leads } from 'src/server/db/schema';
+import { requireBot } from 'src/auth/guard';
 
-/** CSV cell escaping, including protection against spreadsheet formula injection. */
-function csv(value: string | null | undefined) {
-  let v = value ?? '';
-  if (/^[=+\-@\t\r]/.test(v)) v = `'${v}`;
-  return `"${v.replace(/"/g, '""')}"`;
-}
+// ----------------------------------------------------------------------
 
-export async function GET(_req: Request, { params }: { params: Promise<{ botId: string }> }) {
+type Context = {
+  params: Promise<{ botId: string }>;
+};
+
+export async function GET(_request: Request, { params }: Context) {
   const { botId } = await params;
   const { bot } = await requireBot(botId);
-  const db = await getDb();
-  const rows = await db
-    .select()
-    .from(leads)
-    .where(eq(leads.botId, bot.id))
-    .orderBy(desc(leads.createdAt));
-  const body = [
-    'email,name,question,conversation_id,created_at',
-    ...rows.map((l) =>
-      [
-        csv(l.email),
-        csv(l.name),
-        csv(l.question),
-        csv(l.conversationId),
-        csv(l.createdAt.toISOString()),
-      ].join(',')
-    ),
-  ].join('\n');
-  return new Response(body, {
+  const leads = await listAllLeads(bot.id);
+
+  return new Response(leadsToCsv(leads), {
     headers: {
       'content-type': 'text/csv; charset=utf-8',
-      'content-disposition': `attachment; filename="${bot.name.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}-leads.csv"`,
+      'content-disposition': `attachment; filename="${leadsCsvFileName(bot.name)}"`,
       'cache-control': 'no-store',
     },
   });

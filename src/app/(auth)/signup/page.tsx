@@ -1,11 +1,13 @@
-import { redirect } from 'next/navigation';
+import { CONFIG } from 'src/config-global';
 
-import { SignupForm } from 'src/app/(auth)/auth-forms';
-import { getCurrentUser } from 'src/server/auth/session';
+import { SignupView } from 'src/auth/view';
+import { redirectIfAuthenticated } from 'src/auth/guard';
 
-export const metadata = { title: 'Sign up' };
+// ----------------------------------------------------------------------
 
-export default async function SignupPage() {
-  if (await getCurrentUser()) redirect('/dashboard');
-  return <SignupForm />;
+export const metadata = { title: `Sign up · ${CONFIG.appName}` };
+
+export default async function Page() {
+  await redirectIfAuthenticated();
+  return <SignupView />;
 }

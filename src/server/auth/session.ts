@@ -6,7 +6,8 @@ import { createHash, randomBytes } from 'node:crypto';
 import { getDb } from 'src/server/db';
 import { users, sessions, workspaces } from 'src/server/db/schema';
 
-export const SESSION_COOKIE = 'docsbot_session';
+import { SESSION_COOKIE } from './constants';
+
 const SESSION_DAYS = 30;
 const DAY_MS = 86_400_000;
 
