@@ -8,6 +8,10 @@ const email = `e2e-${Date.now()}@example.com`;
 const password = "e2e-password-123";
 let botId = "";
 
+const APP_URL = `http://localhost:${process.env.E2E_APP_PORT ?? "3100"}`;
+const SITE_HOST = `localhost:${process.env.E2E_SITE_PORT ?? "3101"}`;
+const SITE_IP_HOST = `127.0.0.1:${process.env.E2E_SITE_PORT ?? "3101"}`;
+
 async function login(page: Page) {
   await page.goto("/login");
   await page.fill("#email", email);
@@ -37,7 +41,7 @@ test("visitor signs up and creates a bot", async ({ page }) => {
 test("ingests the website and a PDF with visible status", async ({ page }) => {
   await login(page);
   await page.goto(`/dashboard/bots/${botId}/sources`);
-  await page.fill("#url", "http://localhost:3101");
+  await page.fill("#url", `http://${SITE_HOST}`);
   await page.fill("#maxPages", "30");
   await page.getByRole("button", { name: "Crawl website" }).click();
   await expect(page.getByText("Website queued for crawling")).toBeVisible();
@@ -87,18 +91,18 @@ test("answers in the playground with citations and captures a lead when it can't
 test("embeds the widget on an allowed external site and blocks other origins", async ({ page, browser }) => {
   await login(page);
   await page.goto(`/dashboard/bots/${botId}/settings`);
-  await page.fill("#allowedDomains", "localhost:3101");
+  await page.fill("#allowedDomains", SITE_HOST);
   await page.getByRole("button", { name: "Save settings" }).click();
   await expect(page.getByText("Settings saved")).toBeVisible();
 
   await page.goto(`/dashboard/bots/${botId}/install`);
   await expect(page.getByTestId("embed-snippet")).toContainText(`data-bot-id="${botId}"`);
   // "Paste" the snippet into the external site (the fixture server injects it from this file).
-  writeFileSync(path.resolve(".data/e2e-widget.json"), JSON.stringify({ appUrl: "http://localhost:3100", botId }));
+  writeFileSync(path.resolve(".data/e2e-widget.json"), JSON.stringify({ appUrl: APP_URL, botId }));
 
   const visitor = await browser.newContext(); // a fresh visitor without dashboard cookies
   const site = await visitor.newPage();
-  await site.goto("http://localhost:3101/faq");
+  await site.goto(`http://${SITE_HOST}/faq`);
   await site.locator("[data-docsbot] .bubble").click();
   const widget = site.frameLocator("[data-docsbot] iframe");
   await expect(widget.locator(".head")).toContainText("Northwind Support");
@@ -113,14 +117,14 @@ test("embeds the widget on an allowed external site and blocks other origins", a
   const other = await visitor.newPage();
   const warnings: string[] = [];
   other.on("console", (m) => warnings.push(m.text()));
-  await other.goto("http://127.0.0.1:3101/faq");
-  await expect.poll(() => warnings.some((w) => w.includes("not enabled for http://127.0.0.1:3101"))).toBe(true);
+  await other.goto(`http://${SITE_IP_HOST}/faq`);
+  await expect.poll(() => warnings.some((w) => w.includes(`not enabled for http://${SITE_IP_HOST}`))).toBe(true);
   await expect(other.locator("[data-docsbot]")).toHaveCount(0);
   await visitor.close();
 
   // The visitor conversation shows up in the dashboard with its page origin.
   await page.goto(`/dashboard/bots/${botId}/conversations`);
-  await expect(page.getByText("http://localhost:3101")).toBeVisible();
+  await expect(page.getByText(`http://${SITE_HOST}`)).toBeVisible();
   await page.goto(`/dashboard/bots/${botId}`);
   await expect(page.getByText("Unanswered questions")).toBeVisible();
   await expect(page.getByRole("link", { name: "Do you offer a student discount?" })).toBeVisible();

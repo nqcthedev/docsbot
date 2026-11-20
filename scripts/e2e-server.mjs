@@ -12,7 +12,8 @@ if (!existsSync(".next/BUILD_ID")) {
   if (r.status !== 0) process.exit(r.status ?? 1);
 }
 
-const child = spawn("pnpm", ["start"], { stdio: "inherit", env: { ...process.env, DATABASE_URL: `pglite://${dataDir}` } });
+const port = process.env.PORT ?? "3100";
+const child = spawn("pnpm", ["exec", "next", "start", "--port", port], { stdio: "inherit", env: { ...process.env, DATABASE_URL: `pglite://${dataDir}` } });
 const stop = () => child.kill("SIGTERM");
 process.on("SIGINT", stop);
 process.on("SIGTERM", stop);
