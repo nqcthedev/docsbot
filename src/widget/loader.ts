@@ -56,6 +56,7 @@ declare global {
     const panel = shadow.querySelector<HTMLDivElement>(".panel")!;
     const bubble = shadow.querySelector<HTMLButtonElement>(".bubble")!;
     let iframe: HTMLIFrameElement | undefined;
+    let iframeReady = false;
     let isOpen = false;
     let teaser: HTMLDivElement | undefined;
 
@@ -66,6 +67,10 @@ declare global {
         iframe.title = `${cfg.name} chat`;
         iframe.allow = "clipboard-write";
         iframe.src = `${base}/embed/${encodeURIComponent(cfg.id)}?origin=${encodeURIComponent(location.origin)}`;
+        iframe.addEventListener("load", () => {
+          iframeReady = true;
+          if (isOpen) iframe?.contentWindow?.postMessage({ type: "docsbot:opened" }, base);
+        });
         panel.appendChild(iframe);
       }
       isOpen = true;
@@ -74,7 +79,7 @@ declare global {
       bubble.innerHTML = icons.close;
       bubble.setAttribute("aria-expanded", "true");
       bubble.setAttribute("aria-label", "Close chat");
-      iframe.contentWindow?.postMessage({ type: "docsbot:opened" }, base);
+      if (iframeReady) iframe.contentWindow?.postMessage({ type: "docsbot:opened" }, base);
     };
     const close = () => {
       isOpen = false;
