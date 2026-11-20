@@ -165,7 +165,7 @@ describe("streamWithFallback", () => {
   it("retries transient errors with backoff (honouring Retry-After) before succeeding", async () => {
     const g = scripted("gemini", ["429", "500", "ok"]);
     const sleep = vi.fn(noSleep);
-    const out = await collect(streamWithFallback([{ provider: g, model: "gemini-2.5-flash" }], req, { maxRetries: 2, sleep, random: () => 1 }));
+    const out = await collect(streamWithFallback([{ provider: g, model: "gemini-2.5-flash" }], req, { maxRetries: 2, sleep, random: () => 1, cooldowns: new Map() }));
     expect(g.calls).toHaveLength(3);
     expect(sleep).toHaveBeenNthCalledWith(1, 1234);
     expect(sleep).toHaveBeenNthCalledWith(2, 1000);
@@ -183,7 +183,7 @@ describe("streamWithFallback", () => {
           { provider: o, model: "gpt-4o-mini" },
         ],
         req,
-        { maxRetries: 1, sleep: noSleep },
+        { maxRetries: 1, sleep: noSleep, cooldowns: new Map() },
       ),
     );
     expect(g.calls).toHaveLength(2);
@@ -201,7 +201,7 @@ describe("streamWithFallback", () => {
           { provider: a, model: "claude-haiku-5-5" },
         ],
         req,
-        { maxRetries: 2, sleep },
+        { maxRetries: 2, sleep, cooldowns: new Map() },
       ),
     );
     expect(g.calls).toHaveLength(1);
@@ -220,7 +220,7 @@ describe("streamWithFallback", () => {
           { provider: o, model: "b" },
         ],
         req,
-        { maxRetries: 1, sleep: noSleep },
+        { maxRetries: 1, sleep: noSleep, cooldowns: new Map() },
       ),
     ).catch((e) => e);
     expect(err).toBeInstanceOf(AllProvidersFailedError);
@@ -238,13 +238,37 @@ describe("streamWithFallback", () => {
           { provider: o, model: "b" },
         ] as Candidate[],
         req,
-        { maxRetries: 2, sleep: noSleep },
+        { maxRetries: 2, sleep: noSleep, cooldowns: new Map() },
       ))
         seen.push(c);
     })().catch((e) => e);
     expect(err).toBeInstanceOf(StreamInterruptedError);
     expect(seen).toHaveLength(2);
     expect(o.calls).toHaveLength(0);
+  });
+
+  it("skips a rate-limited model for a cooldown period (circuit breaker)", async () => {
+    const cooldowns = new Map<string, number>();
+    let t = 1_000_000;
+    const opts = { maxRetries: 1, sleep: noSleep, cooldowns, now: () => t, cooldownMs: 30_000 };
+    const g = scripted("gemini", ["429", "429", "ok"]);
+    const o = scripted("openai", ["ok", "ok", "ok"]);
+    const cands = [
+      { provider: g, model: "gemini-2.5-flash" },
+      { provider: o, model: "gpt-4o-mini" },
+    ];
+    await collect(streamWithFallback(cands, req, opts));
+    expect(g.calls).toHaveLength(2);
+    expect(cooldowns.get("gemini:gemini-2.5-flash")).toBe(t + 1234); // Retry-After wins over the default
+
+    const second = await collect(streamWithFallback(cands, req, opts));
+    expect(g.calls).toHaveLength(2); // skipped while cooling down
+    expect(second[0]).toMatchObject({ provider: "openai", attempts: [{ error: expect.stringContaining("cooling down") }] });
+
+    t += 2000; // cooldown expired
+    await collect(streamWithFallback(cands, req, opts));
+    expect(g.calls).toHaveLength(3);
+    expect(cooldowns.has("gemini:gemini-2.5-flash")).toBe(false);
   });
 
   it("computes capped exponential backoff with jitter", () => {

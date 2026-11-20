@@ -21,9 +21,9 @@ export default async function ConversationsPage({ params }: { params: Promise<{ 
       messageCount: conversations.messageCount,
       createdAt: conversations.createdAt,
       lastMessageAt: conversations.lastMessageAt,
-      firstQuestion: sql<string | null>`(SELECT content FROM messages m WHERE m.conversation_id = ${conversations.id} AND m.role = 'user' ORDER BY m.created_at ASC LIMIT 1)`,
-      unanswered: sql<number>`(SELECT count(*)::int FROM messages m WHERE m.conversation_id = ${conversations.id} AND m.role = 'assistant' AND m.answered = false)`,
-      hasLead: sql<boolean>`EXISTS (SELECT 1 FROM leads l WHERE l.conversation_id = ${conversations.id})`,
+      firstQuestion: sql<string | null>`(SELECT content FROM messages m WHERE m.conversation_id = conversations.id AND m.role = 'user' ORDER BY m.created_at ASC LIMIT 1)`,
+      unanswered: sql<number>`(SELECT count(*)::int FROM messages m WHERE m.conversation_id = conversations.id AND m.role = 'assistant' AND m.answered = false)`,
+      hasLead: sql<boolean>`EXISTS (SELECT 1 FROM leads l WHERE l.conversation_id = conversations.id)`,
     })
     .from(conversations)
     .where(eq(conversations.botId, bot.id))

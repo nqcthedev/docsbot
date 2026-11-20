@@ -13,7 +13,14 @@ export type FallbackOptions = {
   sleep?: (ms: number) => Promise<void>;
   random?: () => number;
   logger?: Logger;
+  /** Circuit breaker store; defaults to a process-wide map. */
+  cooldowns?: Map<string, number>;
+  now?: () => number;
+  /** How long a rate-limited model is skipped when the provider sends no Retry-After. */
+  cooldownMs?: number;
 };
+
+const globalCooldowns = new Map<string, number>();
 
 export type FallbackChunk = ChatChunk | { type: "start"; provider: string; model: string; attempts: AttemptRecord[] };
 
@@ -53,10 +60,20 @@ export async function* streamWithFallback(candidates: Candidate[], request: Omit
   const baseDelayMs = options.baseDelayMs ?? 500;
   const maxDelayMs = options.maxDelayMs ?? 8_000;
   const attempts: AttemptRecord[] = [];
+  const cooldowns = options.cooldowns ?? globalCooldowns;
+  const now = options.now ?? Date.now;
 
   if (candidates.length === 0) throw new AllProvidersFailedError([]);
 
-  for (const { provider, model } of candidates) {
+  for (const [index, { provider, model }] of candidates.entries()) {
+    // Circuit breaker: a model that just exhausted its retries on 429s is skipped for a while,
+    // so every visitor doesn't pay the retry latency. The last candidate is always attempted.
+    const key = `${provider.name}:${model}`;
+    const until = cooldowns.get(key);
+    if (until && until > now() && index < candidates.length - 1) {
+      attempts.push({ provider: provider.name, model, attempt: 0, error: "skipped: cooling down after rate limit", retryable: true });
+      continue;
+    }
     for (let attempt = 0; attempt <= options.maxRetries; attempt++) {
       if (request.signal?.aborted) throw request.signal.reason ?? new Error("aborted");
       const it = provider.stream({ ...request, model });
@@ -67,11 +84,15 @@ export async function* streamWithFallback(candidates: Candidate[], request: Omit
         const pe = err instanceof ProviderError ? err : new ProviderError(String((err as Error)?.message ?? err), provider.name, { retryable: true });
         attempts.push({ provider: provider.name, model, attempt, error: pe.message, status: pe.status, retryable: pe.retryable });
         options.logger?.warn("ai provider attempt failed", { provider: provider.name, model, attempt, status: pe.status, retryable: pe.retryable, error: pe.message });
-        if (!pe.retryable || attempt === options.maxRetries) break;
+        if (!pe.retryable || attempt === options.maxRetries) {
+          if (pe.status === 429) cooldowns.set(key, now() + Math.min(pe.retryAfterMs ?? options.cooldownMs ?? 60_000, 10 * 60_000));
+          break;
+        }
         await sleep(backoffDelay(attempt, { baseDelayMs, maxDelayMs, random, retryAfterMs: pe.retryAfterMs }));
         continue;
       }
 
+      cooldowns.delete(key);
       yield { type: "start", provider: provider.name, model, attempts };
       if (first.done) return;
       yield first.value;
