@@ -37,7 +37,8 @@ describe("answerQuestion", () => {
       .values({ botId: bot.id, type: "text", name: "Shipping FAQ", textContent: "# Shipping\n\nShipping to Canada is a flat $16.\n\n# Refunds\n\nRefunds within 30 days." })
       .returning();
     await ingestSource(src!.id, { db, embeddings, allowPrivateNetworks: true, maxPagesCap: 5, crawlTimeoutMs: 1000, logger });
-    [bot] = await db.select().from(bots).where(eq(bots.id, bot.id));
+    const [reloaded] = await db.select().from(bots).where(eq(bots.id, bot.id));
+    bot = reloaded!;
   });
   afterAll(() => close());
 

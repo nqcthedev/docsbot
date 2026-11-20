@@ -7,7 +7,8 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
-  output: "standalone",
+  // Standalone output is used by the Docker image (see Dockerfile); `next start` is used otherwise.
+  output: process.env.NEXT_OUTPUT === "standalone" ? "standalone" : undefined,
   poweredByHeader: false,
   // Native/WASM packages must be loaded from node_modules at runtime, not bundled.
   serverExternalPackages: ["@electric-sql/pglite", "@electric-sql/pglite-pgvector", "unpdf", "postgres"],
@@ -15,12 +16,11 @@ const nextConfig: NextConfig = {
     serverActions: { bodySizeLimit: "12mb" },
   },
   async headers() {
+    const noFraming = [...securityHeaders, { key: "Content-Security-Policy", value: "frame-ancestors 'none'" }, { key: "X-Frame-Options", value: "DENY" }];
     return [
-      {
-        // Everything except the embeddable chat iframe and public API must never be framed (clickjacking).
-        source: "/((?!embed/|api/v1/|widget).*)",
-        headers: [...securityHeaders, { key: "Content-Security-Policy", value: "frame-ancestors 'none'" }, { key: "X-Frame-Options", value: "DENY" }],
-      },
+      // Everything except the embeddable chat iframe, public API and widget assets must never be framed (clickjacking).
+      { source: "/", headers: noFraming },
+      { source: "/:path((?!embed/|api/v1/|widget).*)", headers: noFraming },
       {
         source: "/widget.js",
         headers: [

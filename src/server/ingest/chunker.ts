@@ -86,9 +86,9 @@ function tail(text: string, chars: number): string {
  * continuation chunk repeats the section heading plus `overlapChars` of preceding text.
  */
 export function chunkMarkdown(markdown: string, options: ChunkOptions = {}): Chunk[] {
-  const maxChars = options.maxChars ?? 1200;
-  const overlapChars = Math.min(options.overlapChars ?? 200, Math.floor(maxChars / 3));
-  const minChars = options.minChars ?? 250;
+  const maxChars = options.maxChars ?? 900;
+  const overlapChars = Math.min(options.overlapChars ?? 150, Math.floor(maxChars / 3));
+  const minChars = options.minChars ?? 200;
   const sections = splitSections(markdown);
 
   const pieces: { text: string; path: string[] }[] = [];
@@ -103,7 +103,9 @@ export function chunkMarkdown(markdown: string, options: ChunkOptions = {}): Chu
     const full = [section.heading, ...section.body].filter(Boolean).join("\n\n");
     if (full.length <= maxChars) {
       // Pack small whole sections together while they fit.
-      if (pack && pack.text.length + 2 + full.length <= maxChars && (pack.text.length < minChars || full.length < minChars || pack.text.length + full.length <= maxChars)) {
+      // Pack whole sections together only while the running chunk (or the new section) is small,
+      // so each chunk stays focused on one topic — sharper embeddings, more precise citations.
+      if (pack && pack.text.length + 2 + full.length <= maxChars && (pack.text.length < minChars || full.length < minChars)) {
         pack.text += "\n\n" + full;
       } else {
         emit();

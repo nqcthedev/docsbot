@@ -1,6 +1,8 @@
 import dns from "node:dns";
 import net from "node:net";
-import { Agent } from "undici";
+import http from "node:http";
+import https from "node:https";
+import zlib from "node:zlib";
 
 /**
  * SSRF protection for the crawler. Users submit arbitrary URLs, so the server must never be
@@ -62,7 +64,8 @@ export function assertCrawlableUrl(raw: string, allowPrivate: boolean): URL {
 
 type LookupCallback = (err: NodeJS.ErrnoException | null, address: string | dns.LookupAddress[], family?: number) => void;
 
-function guardedLookup(hostname: string, options: dns.LookupOptions, callback: LookupCallback) {
+/** DNS lookup that refuses to return private addresses. Used at connect time, so it also defeats DNS rebinding. */
+export function guardedLookup(hostname: string, options: dns.LookupOptions, callback: LookupCallback) {
   dns.lookup(hostname, { ...options, all: true }, (err, addresses) => {
     if (err) return callback(err, "", 0);
     const list = addresses as dns.LookupAddress[];
@@ -75,8 +78,50 @@ function guardedLookup(hostname: string, options: dns.LookupOptions, callback: L
   });
 }
 
-let publicAgent: Agent | undefined;
-/** undici dispatcher whose DNS lookups refuse private addresses. */
-export function publicOnlyDispatcher(): Agent {
-  return (publicAgent ??= new Agent({ connect: { lookup: guardedLookup as never }, connections: 16 }));
+/**
+ * Minimal fetch-compatible GET built on node:http(s) with the guarded lookup. Redirects are
+ * returned as-is (the crawler follows them manually and re-validates every hop).
+ */
+export function guardedFetch(input: string | URL | Request, init: RequestInit = {}): Promise<Response> {
+  const url = new URL(input instanceof Request ? input.url : String(input));
+  const lib = url.protocol === "https:" ? https : http;
+  const headers = Object.fromEntries(new Headers(init.headers).entries());
+  return new Promise<Response>((resolve, reject) => {
+    const req = lib.request(
+      url,
+      { method: "GET", headers: { ...headers, "accept-encoding": "gzip, deflate, br" }, lookup: guardedLookup as never, signal: init.signal ?? undefined },
+      (res) => {
+        const encoding = String(res.headers["content-encoding"] ?? "").toLowerCase();
+        const stream =
+          encoding === "gzip" ? res.pipe(zlib.createGunzip()) : encoding === "deflate" ? res.pipe(zlib.createInflate()) : encoding === "br" ? res.pipe(zlib.createBrotliDecompress()) : res;
+        const chunks: Buffer[] = [];
+        let size = 0;
+        stream.on("data", (c: Buffer) => {
+          size += c.length;
+          if (size > MAX_GUARDED_BYTES) {
+            res.destroy();
+            stream.destroy();
+            reject(new Error("Response too large"));
+            return;
+          }
+          chunks.push(c);
+        });
+        stream.on("error", reject);
+        stream.on("end", () => {
+          const h = new Headers();
+          for (const [k, v] of Object.entries(res.headers)) {
+            if (v === undefined || k === "content-encoding" || k === "content-length") continue;
+            h.set(k, Array.isArray(v) ? v.join(", ") : v);
+          }
+          const status = res.statusCode ?? 502;
+          const body = status === 204 || status === 304 ? null : Buffer.concat(chunks);
+          resolve(Object.defineProperty(new Response(body, { status, headers: h }), "url", { value: url.toString() }));
+        });
+      },
+    );
+    req.on("error", reject);
+    req.end();
+  });
 }
+
+const MAX_GUARDED_BYTES = 5_000_000;

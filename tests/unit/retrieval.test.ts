@@ -1,12 +1,12 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { assessConfidence, buildKeywordQuery, filterContext, fuseResults, retrieve, type RetrievedChunk } from "@/server/rag/retrieve";
+import { assessConfidence, buildKeywordQuery, filterContext, fuseResults, retrieve } from "@/server/rag/retrieve";
 import { ingestSource } from "@/server/ingest/pipeline";
 import { sources } from "@/server/db/schema";
 import { logger } from "@/server/logger";
 import type { Database } from "@/server/db";
 import { keywordEmbeddings, seedBot, testDb } from "./helpers";
 
-const c = (id: string, extra: Partial<RetrievedChunk> = {}) => ({ id, content: id, headingPath: "", title: id, url: null, page: null, ...extra });
+const c = (id: string, extra: { similarity?: number; keywordRank?: number } = {}) => ({ id, content: id, headingPath: "", title: id, url: null, page: null, ...extra });
 
 describe("pure retrieval logic", () => {
   it("builds a sanitised OR tsquery without stopwords or operators", () => {
@@ -16,7 +16,7 @@ describe("pure retrieval logic", () => {
   });
 
   it("fuses vector and keyword rankings with RRF", () => {
-    const fused = fuseResults([c("a", { similarity: 0.9 } as never), c("b", { similarity: 0.8 } as never)], [c("b", { keywordRank: 0.5 } as never), c("k", { keywordRank: 0.4 } as never)], 3);
+    const fused = fuseResults([c("a", { similarity: 0.9 }), c("b", { similarity: 0.8 })], [c("b", { keywordRank: 0.5 }), c("k", { keywordRank: 0.4 })], 3);
     expect(fused.map((f) => f.id)).toEqual(["b", "a", "k"]);
     expect(fused[0]).toMatchObject({ similarity: 0.8, keywordRank: 0.5 });
     expect(fused[2]).toMatchObject({ similarity: null, keywordRank: 0.4 });

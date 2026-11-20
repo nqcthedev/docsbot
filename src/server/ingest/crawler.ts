@@ -1,6 +1,6 @@
 import { extractHtml } from "./html-extract";
 import { allowAllRobots, parseRobots, type Robots } from "./robots";
-import { assertCrawlableUrl, BlockedUrlError, publicOnlyDispatcher } from "./url-guard";
+import { assertCrawlableUrl, BlockedUrlError, guardedFetch as ssrfSafeFetch } from "./url-guard";
 import { sha256 } from "./chunker";
 
 export type CrawledPage = { url: string; title: string; markdown: string };
@@ -40,16 +40,16 @@ export function normalizeUrl(raw: string): string | undefined {
 type Fetched = { url: string; status: number; contentType: string; body: string };
 
 async function guardedFetch(rawUrl: string, opts: CrawlOptions, accept: string): Promise<Fetched> {
-  const f = opts.fetch ?? fetch;
+  // Public crawls go through the SSRF-guarded client; tests and local dev may inject/allow plain fetch.
+  const f = opts.fetch ?? (opts.allowPrivateNetworks ? fetch : ssrfSafeFetch);
   let current = rawUrl;
   for (let hop = 0; hop <= 5; hop++) {
     assertCrawlableUrl(current, opts.allowPrivateNetworks);
-    const init: RequestInit & { dispatcher?: unknown } = {
+    const init: RequestInit = {
       redirect: "manual",
       headers: { "user-agent": opts.userAgent ?? DEFAULT_USER_AGENT, accept },
       signal: AbortSignal.any([AbortSignal.timeout(opts.timeoutMs ?? 10_000), ...(opts.signal ? [opts.signal] : [])]),
     };
-    if (!opts.allowPrivateNetworks && !opts.fetch) init.dispatcher = publicOnlyDispatcher();
     const res = await f(current, init);
     if (res.status >= 300 && res.status < 400 && res.headers.get("location")) {
       current = new URL(res.headers.get("location")!, current).toString();

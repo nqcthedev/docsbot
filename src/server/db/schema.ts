@@ -81,7 +81,7 @@ export const bots = pgTable(
     chatModel: text("chat_model").notNull(),
     temperature: real("temperature").notNull().default(0.2),
     /** Minimum cosine similarity of the best retrieved chunk. Below it the bot declines instead of guessing. */
-    minSimilarity: real("min_similarity").notNull().default(0.6),
+    minSimilarity: real("min_similarity").notNull().default(0.5),
     topK: integer("top_k").notNull().default(6),
     allowedDomains: text("allowed_domains").array().notNull().default(sql`'{}'::text[]`),
     leadCaptureEnabled: boolean("lead_capture_enabled").notNull().default(true),

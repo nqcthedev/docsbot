@@ -1,0 +1,1 @@
+ALTER TABLE "bots" ALTER COLUMN "min_similarity" SET DEFAULT 0.5;

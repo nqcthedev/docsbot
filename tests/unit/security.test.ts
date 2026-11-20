@@ -139,3 +139,12 @@ describe("env validation", () => {
     expect(envSchema.parse({ CRAWLER_ALLOW_PRIVATE_NETWORKS: "true" }).CRAWLER_ALLOW_PRIVATE_NETWORKS).toBe(true);
   });
 });
+
+describe("connect-time DNS guard", () => {
+  it("refuses hostnames that resolve to private addresses (DNS rebinding safe)", async () => {
+    const { guardedLookup, guardedFetch } = await import("@/server/ingest/url-guard");
+    const err = await new Promise<NodeJS.ErrnoException | null>((resolve) => guardedLookup("localhost", {}, (e) => resolve(e)));
+    expect(err?.message).toMatch(/private address/);
+    await expect(guardedFetch("http://localhost:9/")).rejects.toThrow(/private address/);
+  });
+});
