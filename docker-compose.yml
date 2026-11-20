@@ -1,0 +1,40 @@
+# Self-hosted DocsBot: app + Postgres 16 with pgvector.
+#   cp .env.example .env   # add GEMINI_API_KEY and/or OPENAI_API_KEY / ANTHROPIC_API_KEY
+#   docker compose up -d --build
+# Then open http://localhost:3100. (Untested in the development sandbox: no Docker daemon there.)
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: docsbot
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-docsbot}
+      POSTGRES_DB: docsbot
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U docsbot -d docsbot"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      DATABASE_URL: postgres://docsbot:${POSTGRES_PASSWORD:-docsbot}@db:5432/docsbot
+      APP_URL: ${APP_URL:-http://localhost:3100}
+      INGEST_WORKER: inline
+      CRAWLER_ALLOW_PRIVATE_NETWORKS: "false"
+      LOG_FORMAT: json
+    ports:
+      - "3100:3100"
+
+volumes:
+  pgdata:

@@ -3,9 +3,28 @@ import { bots, users, workspaces } from "@/server/db/schema";
 import { EMBEDDING_DIMENSIONS } from "@/server/db/schema";
 import type { EmbeddingProvider } from "@/server/ai/types";
 
-/** Fresh in-memory PGlite database with migrations applied. */
+/**
+ * Fresh database with migrations applied: in-memory PGlite by default, or a throwaway database
+ * on a real Postgres + pgvector server when TEST_DATABASE_URL is set (used in CI).
+ */
 export async function testDb() {
-  return createDatabase("pglite://memory", { migrate: true });
+  const admin = process.env.TEST_DATABASE_URL;
+  if (!admin) return createDatabase("pglite://memory", { migrate: true });
+  const name = `docsbot_test_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  const postgres = (await import("postgres")).default;
+  const sqlAdmin = postgres(admin, { max: 1, onnotice: () => {} });
+  await sqlAdmin.unsafe(`CREATE DATABASE ${name}`);
+  const url = new URL(admin);
+  url.pathname = `/${name}`;
+  const handle = await createDatabase(url.toString(), { migrate: true });
+  return {
+    ...handle,
+    close: async () => {
+      await handle.close();
+      await sqlAdmin.unsafe(`DROP DATABASE IF EXISTS ${name}`);
+      await sqlAdmin.end();
+    },
+  };
 }
 
 export async function seedBot(db: Database, overrides: Partial<typeof bots.$inferInsert> = {}) {

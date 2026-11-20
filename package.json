@@ -27,7 +27,8 @@
     "seed": "tsx scripts/seed.ts",
     "demo": "tsx scripts/demo.ts",
     "screenshots": "tsx scripts/screenshots.ts",
-    "fixture:pdf": "node scripts/make-fixture-pdf.mjs"
+    "fixture:pdf": "node scripts/make-fixture-pdf.mjs",
+    "build:migrate": "esbuild scripts/migrate.ts --bundle --platform=node --format=esm --target=node20 --outfile=dist/migrate.mjs --external:@electric-sql/* --banner:js=\"import{createRequire}from\\\"module\\\";const require=createRequire(import.meta.url);\""
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.11.0",
