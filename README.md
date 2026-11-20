@@ -13,6 +13,7 @@ It is built as a production-minded v1: real auth, Postgres + pgvector, streaming
 - [Features](#features)
 - [Screenshots](#screenshots)
 - [Architecture](#architecture)
+- [Project structure](#project-structure)
 - [Quick start](#quick-start)
 - [Configuration](#configuration)
 - [Testing](#testing)
@@ -110,21 +111,50 @@ flowchart LR
 
 **Database drivers**: production uses `postgres-js` against any Postgres with pgvector. For zero-setup local development and tests, `DATABASE_URL=pglite://…` runs the same schema and the same SQL on [PGlite](https://pglite.dev), a WASM Postgres with the pgvector extension. Migrations are managed by Drizzle and apply to both.
 
+The code layout is described in [Project structure](#project-structure).
+
+## Project structure
+
+The front end follows a feature-sliced layout: route files stay thin, each feature owns its views and components, and everything that talks to the database lives under `src/server`.
+
 ```
 src/
-  app/                 Next.js routes: landing, auth, dashboard, /embed, /api/v1/*
-  server/
-    ai/                OpenAI-compatible + Anthropic providers, fallback, embeddings, model catalog/pricing
-    ingest/            crawler, robots.txt, HTML extraction, PDF, chunker, SSRF guard, pipeline + queue
-    rag/               retrieval (hybrid + RRF), prompt building, answer orchestration
-    db/                Drizzle schema and dual-driver client
-    auth/              scrypt passwords, DB-backed sessions
-    ratelimit.ts, domains.ts, env.ts, logger.ts, validation.ts
-  widget/              embeddable loader + iframe chat app (bundled with esbuild)
-  shared/              SSE parser, safe Markdown renderer (used by server, dashboard and widget)
-fixtures/northwind/    fictional coffee-roaster website, wholesale PDF, local server
-tests/                 unit (vitest), integration (live AI), e2e (Playwright)
+  app/                  Next.js routes only: each page.tsx sets metadata, loads data and renders one view;
+                        route.ts files re-export a handler from src/server/api
+  actions/              Server actions per domain (auth, bot, source); validate input with zod, return FormState
+  auth/
+    guard/              requireUser / requireBot / redirectIfAuthenticated (session check + tenant ownership)
+    view/               Login and sign-up screens
+  sections/             Feature UI: <feature>/view/*-view.tsx (one per page) plus the feature's components
+    home/  overview/  bot/  source/  playground/  conversation/  lead/  settings/  install/  error/
+  layouts/              Page chrome: main (landing), auth-centered, dashboard (sidebar), bot (header + tabs),
+                        plus nav configs
+  components/           Reusable UI, one folder per component with an index.ts barrel
+                        (ui primitives, logo, chart, copy-button, nav-section, nav-tabs, auto-refresh, loading-screen)
+  routes/               paths.ts, the single source of truth for every URL; active-link hook
+  hooks/                Client hooks (form reset after a successful action)
+  utils/                Small pure helpers: cn, number/time formatting, form-state readers
+  types/                Shared domain types derived from the Drizzle schema (bot, source, conversation, lead, user, common)
+  config-global.ts      CONFIG: app name, version and other browser-safe settings
+  global.css            Tailwind theme and the rendered-answer styles
+  middleware.ts         Edge redirect to /login when there is no session cookie
+  server/               Backend, never imported by client components
+    api/                Request handlers behind the public API, embed iframe, cron and health routes
+    ai/                 OpenAI-compatible + Anthropic providers, fallback, embeddings, model catalog/pricing
+    ingest/             Crawler, robots.txt, HTML extraction, PDF, chunker, SSRF guard, pipeline + queue
+    rag/                Retrieval (hybrid + RRF), prompt building, answer orchestration
+    db/                 Drizzle schema and dual-driver client (Postgres / PGlite)
+    auth/               scrypt passwords, DB-backed sessions
+    http/               Public-API helpers: CORS, origin checks, JSON errors, client IP
+    data.ts             Read models for the dashboard pages
+    env.ts, validation.ts, ratelimit.ts, domains.ts, leads-csv.ts, logger.ts, errors.ts
+  shared/               Code used by server, dashboard and widget: SSE parser, safe Markdown renderer, limits
+  widget/               Embeddable loader + iframe chat app (bundled with esbuild)
+fixtures/northwind/     Fictional coffee-roaster website, wholesale PDF, local server
+tests/                  unit (vitest), integration (live AI), e2e (Playwright)
 ```
+
+Conventions: kebab-case file names prefixed by their feature (`source-add-form.tsx`), named exports (default exports only where Next.js requires them), `type Props` above each component, imports through the `src/…` alias sorted into layered blocks by ESLint (perfectionist), and Prettier formatting (`pnpm format`).
 
 ## Quick start
 
@@ -194,16 +224,16 @@ All variables are validated with zod at startup (`src/server/env.ts`). See `.env
 ## Testing
 
 ```bash
-pnpm lint && pnpm typecheck
-pnpm test                 # 104 unit tests, no network; DB tests run on in-memory PGlite
+pnpm lint && pnpm typecheck && pnpm format:check
+pnpm test                 # 115 unit tests, no network; DB tests run on in-memory PGlite
 TEST_DATABASE_URL=postgres://… pnpm test   # the same tests on a real Postgres + pgvector
 pnpm test:integration     # live AI: crawl fixture site + PDF → embed → ask → check answers & citations
 pnpm build && pnpm test:e2e   # Playwright: signup → bot → ingest → playground → leads → widget on external site
 ```
 
-- **Unit** (vitest): chunker, HTML extraction, robots.txt, crawler (against the local fixture server), retrieval fusion and threshold logic, pgvector queries, prompt building and the `NO_ANSWER` gate, citation extraction, rate limiter (memory and Postgres), provider clients with mocked HTTP (OpenAI-compatible SSE, the Anthropic SDK, embeddings), fallback, backoff and the circuit breaker, the answer orchestrator, SSRF guard, domain matching/CSP, password hashing, the Markdown renderer's XSS escaping, and env validation.
+- **Unit** (vitest): chunker, HTML extraction, robots.txt, crawler (against the local fixture server), retrieval fusion and threshold logic, pgvector queries, prompt building and the `NO_ANSWER` gate, citation extraction, rate limiter (memory and Postgres), provider clients with mocked HTTP (OpenAI-compatible SSE, the Anthropic SDK, embeddings), fallback, backoff and the circuit breaker, the answer orchestrator, SSRF guard, domain matching/CSP, password hashing, the Markdown renderer's XSS escaping, env validation, and the dashboard's pure helpers (route paths, formatting, source descriptions, install snippets, CSV export).
 - **Integration**: real embeddings and chat (the cheapest Gemini model). It checks a page-specific answer cited to `/shipping`, a PDF answer cited to page 1, a deep-page detail, a refusal with lead offer, that robots-disallowed content never leaks, and usage accounting. It skips itself when no key is set.
-- **E2E**: Playwright against a production build on a fresh database, including the widget on `localhost:3101` and refusal on the non-allowed origin `127.0.0.1:3101`.
+- **E2E**: Playwright against a production build on a fresh database, including the widget on `localhost:3101` and refusal on the non-allowed origin `127.0.0.1:3101`. If those ports are taken (e.g. by a running `pnpm demo`), pick others with `E2E_APP_PORT=3200 E2E_SITE_PORT=3201 pnpm test:e2e`.
 
 CI (`.github/workflows/ci.yml`) runs lint, typecheck, unit tests on both PGlite and a `pgvector/pgvector:pg16` service, migrations and the build. The live tests run when a `GEMINI_API_KEY` or `OPENAI_API_KEY` secret is present.
 

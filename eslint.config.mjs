@@ -54,6 +54,26 @@ const sortImports = [
   },
 ];
 
+/**
+ * Layers rewritten to the stricter bar (UI, actions, guards, request handlers). The older
+ * backend modules (ai, ingest, rag) still use a few justified non-null assertions on
+ * indexed access.
+ */
+const STRICT_FILES = [
+  'src/actions/**',
+  'src/app/**',
+  'src/auth/**',
+  'src/components/**',
+  'src/hooks/**',
+  'src/layouts/**',
+  'src/routes/**',
+  'src/sections/**',
+  'src/server/api/**',
+  'src/server/data.ts',
+  'src/types/**',
+  'src/utils/**',
+];
+
 const config = [
   {
     ignores: [
@@ -87,6 +107,19 @@ const config = [
       'perfectionist/sort-named-exports': ['error', { type: 'line-length', order: 'asc' }],
       'perfectionist/sort-exports': ['error', { type: 'line-length', order: 'asc' }],
     },
+  },
+  {
+    files: STRICT_FILES,
+    rules: {
+      '@typescript-eslint/no-explicit-any': 'error',
+      '@typescript-eslint/no-non-null-assertion': 'error',
+    },
+  },
+  {
+    // Named exports everywhere; Next.js requires default exports for route files and configs.
+    files: ['src/**'],
+    ignores: ['src/app/**'],
+    rules: { 'import/no-default-export': 'error' },
   },
 ];
 
