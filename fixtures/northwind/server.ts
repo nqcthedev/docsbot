@@ -1,3 +1,6 @@
+import http from "node:http";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 /**
  * Serves the fictional "Northwind Coffee Roasters" website used for demos and tests.
  * Pages live in ./pages (with a tiny front-matter header) and share ./layout.html.
@@ -7,10 +10,7 @@
  * If a widget config file exists ({ appUrl, botId }), the DocsBot embed snippet is injected
  * into every page — exactly what a customer would paste into their own site.
  */
-import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
-import http from "node:http";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { statSync, existsSync, readdirSync, readFileSync } from "node:fs";
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const PAGES = path.join(ROOT, "pages");

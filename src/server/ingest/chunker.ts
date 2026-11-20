@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash } from 'node:crypto';
 
 export type ChunkOptions = {
   /** Target maximum characters per chunk (~4 chars per token). */
@@ -23,16 +23,19 @@ type Section = { path: string[]; heading?: string; body: string[] };
 
 const HEADING = /^(#{1,6})\s+(.*)$/;
 
-export const sha256 = (s: string) => createHash("sha256").update(s).digest("hex");
+export const sha256 = (s: string) => createHash('sha256').update(s).digest('hex');
 export const approxTokens = (s: string) => Math.ceil(s.length / 4);
 
 function splitSections(markdown: string): Section[] {
   const sections: Section[] = [];
   const stack: { level: number; text: string }[] = [];
   let current: Section = { path: [], body: [] };
-  for (const block of markdown.split(/\n{2,}/).map((b) => b.trim()).filter(Boolean)) {
+  for (const block of markdown
+    .split(/\n{2,}/)
+    .map((b) => b.trim())
+    .filter(Boolean)) {
     const m = block.match(HEADING);
-    if (m && !block.includes("\n")) {
+    if (m && !block.includes('\n')) {
       if (current.heading || current.body.length) sections.push(current);
       const level = m[1]!.length;
       const text = m[2]!.trim();
@@ -52,17 +55,17 @@ function splitLong(text: string, maxChars: number): string[] {
   if (text.length <= maxChars) return [text];
   const sentences = text.match(/[^.!?]+(?:[.!?]+["')\]]*\s*|$)/g) ?? [text];
   const out: string[] = [];
-  let buf = "";
+  let buf = '';
   for (const s of sentences) {
     if (s.length > maxChars) {
       if (buf) out.push(buf.trim());
-      buf = "";
+      buf = '';
       for (let i = 0; i < s.length; i += maxChars) out.push(s.slice(i, i + maxChars).trim());
       continue;
     }
     if ((buf + s).length > maxChars && buf) {
       out.push(buf.trim());
-      buf = "";
+      buf = '';
     }
     buf += s;
   }
@@ -71,12 +74,12 @@ function splitLong(text: string, maxChars: number): string[] {
 }
 
 function tail(text: string, chars: number): string {
-  if (chars <= 0 || text.length <= chars) return chars <= 0 ? "" : text;
+  if (chars <= 0 || text.length <= chars) return chars <= 0 ? '' : text;
   const slice = text.slice(-chars);
   // Start the overlap at a sentence or word boundary so it reads naturally.
   const sentence = slice.search(/[.!?]\s+[A-Z0-9]/);
   if (sentence !== -1 && sentence < chars / 2) return slice.slice(sentence + 1).trim();
-  const space = slice.indexOf(" ");
+  const space = slice.indexOf(' ');
   return space === -1 ? slice : slice.slice(space + 1);
 }
 
@@ -100,13 +103,17 @@ export function chunkMarkdown(markdown: string, options: ChunkOptions = {}): Chu
   };
 
   for (const section of sections) {
-    const full = [section.heading, ...section.body].filter(Boolean).join("\n\n");
+    const full = [section.heading, ...section.body].filter(Boolean).join('\n\n');
     if (full.length <= maxChars) {
       // Pack small whole sections together while they fit.
       // Pack whole sections together only while the running chunk (or the new section) is small,
       // so each chunk stays focused on one topic — sharper embeddings, more precise citations.
-      if (pack && pack.text.length + 2 + full.length <= maxChars && (pack.text.length < minChars || full.length < minChars)) {
-        pack.text += "\n\n" + full;
+      if (
+        pack &&
+        pack.text.length + 2 + full.length <= maxChars &&
+        (pack.text.length < minChars || full.length < minChars)
+      ) {
+        pack.text += '\n\n' + full;
       } else {
         emit();
         pack = { text: full, path: section.path };
@@ -115,34 +122,40 @@ export function chunkMarkdown(markdown: string, options: ChunkOptions = {}): Chu
     }
 
     emit();
-    const header = section.heading ? section.heading + "\n\n" : "";
-    const paragraphs = section.body.flatMap((p) => splitLong(p, maxChars - header.length - overlapChars - 2));
+    const header = section.heading ? section.heading + '\n\n' : '';
+    const paragraphs = section.body.flatMap((p) =>
+      splitLong(p, maxChars - header.length - overlapChars - 2)
+    );
     let buf = header;
-    let previous = "";
+    let previous = '';
     for (const p of paragraphs) {
       if (buf.length + p.length + 2 > maxChars && buf.trim() !== header.trim()) {
         pieces.push({ text: buf.trim(), path: section.path });
         previous = buf.slice(header.length);
         const overlap = tail(previous, overlapChars);
-        buf = header + (overlap ? overlap + "\n\n" : "");
+        buf = header + (overlap ? overlap + '\n\n' : '');
       }
-      buf += p + "\n\n";
+      buf += p + '\n\n';
     }
-    if (buf.trim() && buf.trim() !== header.trim()) pieces.push({ text: buf.trim(), path: section.path });
+    if (buf.trim() && buf.trim() !== header.trim())
+      pieces.push({ text: buf.trim(), path: section.path });
   }
   emit();
 
   return pieces.map((p, i) => ({
     ordinal: i,
     content: p.text,
-    headingPath: p.path.join(" › "),
+    headingPath: p.path.join(' › '),
     tokenCount: approxTokens(p.text),
     contentHash: sha256(p.text),
   }));
 }
 
 /** Text that gets embedded: document title and heading trail give each chunk standalone context. */
-export function embeddingText(docTitle: string, chunk: Pick<Chunk, "headingPath" | "content">): string {
-  const ctx = [docTitle, chunk.headingPath].filter(Boolean).join(" › ");
+export function embeddingText(
+  docTitle: string,
+  chunk: Pick<Chunk, 'headingPath' | 'content'>
+): string {
+  const ctx = [docTitle, chunk.headingPath].filter(Boolean).join(' › ');
   return ctx ? `${ctx}\n\n${chunk.content}` : chunk.content;
 }

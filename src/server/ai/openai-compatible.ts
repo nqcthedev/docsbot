@@ -1,6 +1,9 @@
-import { readSse } from "@/shared/sse";
-import { networkError, toProviderError, withIdleTimeout } from "./http";
-import { ProviderError, type ChatChunk, type ChatProvider, type ChatRequest, type FetchLike, type ProviderName } from "./types";
+import type { ChatChunk, FetchLike, ChatRequest, ChatProvider, ProviderName } from './types';
+
+import { readSse } from 'src/shared/sse';
+
+import { ProviderError } from './types';
+import { networkError, toProviderError, withIdleTimeout } from './http';
 
 export type OpenAICompatibleOptions = {
   name: ProviderName;
@@ -19,7 +22,7 @@ type StreamChunk = {
 };
 
 export function joinUrl(base: string, path: string) {
-  return base.replace(/\/+$/, "") + "/" + path.replace(/^\/+/, "");
+  return base.replace(/\/+$/, '') + '/' + path.replace(/^\/+/, '');
 }
 
 /**
@@ -40,18 +43,24 @@ export class OpenAICompatibleChat implements ChatProvider {
       stream_options: { include_usage: true },
       temperature: req.temperature,
       max_tokens: req.maxOutputTokens,
-      messages: [{ role: "system", content: req.system }, ...req.messages],
+      messages: [{ role: 'system', content: req.system }, ...req.messages],
       ...this.opts.modelParams?.(req.model),
     };
     // The connect/first-byte timeout covers the request; the idle timeout below covers the stream.
     const abort = new AbortController();
     const signal = req.signal ? AbortSignal.any([req.signal, abort.signal]) : abort.signal;
-    const firstByteTimer = setTimeout(() => abort.abort(new DOMException("first byte timeout", "TimeoutError")), this.opts.timeoutMs);
+    const firstByteTimer = setTimeout(
+      () => abort.abort(new DOMException('first byte timeout', 'TimeoutError')),
+      this.opts.timeoutMs
+    );
     let res: Response;
     try {
-      res = await f(joinUrl(this.opts.baseUrl, "chat/completions"), {
-        method: "POST",
-        headers: { "content-type": "application/json", authorization: `Bearer ${this.opts.apiKey}` },
+      res = await f(joinUrl(this.opts.baseUrl, 'chat/completions'), {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          authorization: `Bearer ${this.opts.apiKey}`,
+        },
         body: JSON.stringify(body),
         signal,
       });
@@ -64,23 +73,35 @@ export class OpenAICompatibleChat implements ChatProvider {
 
     let usage: { inputTokens: number; outputTokens: number } | undefined;
     try {
-      for await (const ev of withIdleTimeout(readSse(res.body), this.opts.timeoutMs, this.name, () => abort.abort())) {
-        if (ev.data === "[DONE]") break;
+      for await (const ev of withIdleTimeout(
+        readSse(res.body),
+        this.opts.timeoutMs,
+        this.name,
+        () => abort.abort()
+      )) {
+        if (ev.data === '[DONE]') break;
         let chunk: StreamChunk;
         try {
           chunk = JSON.parse(ev.data) as StreamChunk;
         } catch {
           continue;
         }
-        if (chunk.error) throw new ProviderError(`${this.name} stream error: ${chunk.error.message}`, this.name, { retryable: true });
+        if (chunk.error)
+          throw new ProviderError(`${this.name} stream error: ${chunk.error.message}`, this.name, {
+            retryable: true,
+          });
         const text = chunk.choices?.[0]?.delta?.content;
-        if (text) yield { type: "text", text };
+        if (text) yield { type: 'text', text };
         // OpenAI sends usage once at the end; Gemini sends a cumulative value on every chunk.
-        if (chunk.usage) usage = { inputTokens: chunk.usage.prompt_tokens ?? 0, outputTokens: chunk.usage.completion_tokens ?? 0 };
+        if (chunk.usage)
+          usage = {
+            inputTokens: chunk.usage.prompt_tokens ?? 0,
+            outputTokens: chunk.usage.completion_tokens ?? 0,
+          };
       }
     } catch (err) {
       throw networkError(this.name, err);
     }
-    if (usage) yield { type: "usage", ...usage };
+    if (usage) yield { type: 'usage', ...usage };
   }
 }

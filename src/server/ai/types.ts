@@ -1,6 +1,6 @@
-export type ProviderName = "gemini" | "openai" | "anthropic";
+export type ProviderName = 'gemini' | 'openai' | 'anthropic';
 
-export type ChatMessage = { role: "user" | "assistant"; content: string };
+export type ChatMessage = { role: 'user' | 'assistant'; content: string };
 
 export type ChatRequest = {
   model: string;
@@ -11,7 +11,8 @@ export type ChatRequest = {
   signal?: AbortSignal;
 };
 
-export type ChatChunk = { type: "text"; text: string } | { type: "usage"; inputTokens: number; outputTokens: number };
+export type ChatChunk =
+  { type: 'text'; text: string } | { type: 'usage'; inputTokens: number; outputTokens: number };
 
 export interface ChatProvider {
   readonly name: ProviderName;
@@ -37,10 +38,15 @@ export class ProviderError extends Error {
   constructor(
     message: string,
     public readonly provider: ProviderName,
-    public readonly opts: { status?: number; retryable: boolean; retryAfterMs?: number; cause?: unknown },
+    public readonly opts: {
+      status?: number;
+      retryable: boolean;
+      retryAfterMs?: number;
+      cause?: unknown;
+    }
   ) {
     super(message);
-    this.name = "ProviderError";
+    this.name = 'ProviderError';
   }
   get status() {
     return this.opts.status;

@@ -1,27 +1,28 @@
-import { createHash, randomBytes } from "node:crypto";
-import { and, eq, gt } from "drizzle-orm";
-import { cookies } from "next/headers";
-import { cache } from "react";
-import { getDb } from "../db";
-import { sessions, users, workspaces } from "../db/schema";
+import { cache } from 'react';
+import { cookies } from 'next/headers';
+import { eq, gt, and } from 'drizzle-orm';
+import { createHash, randomBytes } from 'node:crypto';
 
-export const SESSION_COOKIE = "docsbot_session";
+import { getDb } from 'src/server/db';
+import { users, sessions, workspaces } from 'src/server/db/schema';
+
+export const SESSION_COOKIE = 'docsbot_session';
 const SESSION_DAYS = 30;
 const DAY_MS = 86_400_000;
 
-const hashToken = (token: string) => createHash("sha256").update(token).digest("hex");
+const hashToken = (token: string) => createHash('sha256').update(token).digest('hex');
 
 export async function createSession(userId: string) {
-  const token = randomBytes(32).toString("base64url");
+  const token = randomBytes(32).toString('base64url');
   const expiresAt = new Date(Date.now() + SESSION_DAYS * DAY_MS);
   const db = await getDb();
   await db.insert(sessions).values({ id: hashToken(token), userId, expiresAt });
   const jar = await cookies();
   jar.set(SESSION_COOKIE, token, {
     httpOnly: true,
-    sameSite: "lax",
-    secure: (process.env.APP_URL ?? "").startsWith("https://"),
-    path: "/",
+    sameSite: 'lax',
+    secure: (process.env.APP_URL ?? '').startsWith('https://'),
+    path: '/',
     expires: expiresAt,
   });
 }
@@ -33,10 +34,16 @@ export async function destroySession() {
     const db = await getDb();
     await db.delete(sessions).where(eq(sessions.id, hashToken(token)));
   }
-  jar.set(SESSION_COOKIE, "", { httpOnly: true, sameSite: "lax", path: "/", maxAge: 0 });
+  jar.set(SESSION_COOKIE, '', { httpOnly: true, sameSite: 'lax', path: '/', maxAge: 0 });
 }
 
-export type CurrentUser = { id: string; email: string; name: string; workspaceId: string; workspaceName: string };
+export type CurrentUser = {
+  id: string;
+  email: string;
+  name: string;
+  workspaceId: string;
+  workspaceName: string;
+};
 
 /** Validates the session cookie against the database (memoised per request). */
 export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
@@ -66,5 +73,11 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
       .set({ expiresAt: new Date(Date.now() + SESSION_DAYS * DAY_MS) })
       .where(eq(sessions.id, hashToken(token)));
   }
-  return { id: row.id, email: row.email, name: row.name, workspaceId: row.workspaceId, workspaceName: row.workspaceName };
+  return {
+    id: row.id,
+    email: row.email,
+    name: row.name,
+    workspaceId: row.workspaceId,
+    workspaceName: row.workspaceName,
+  };
 });

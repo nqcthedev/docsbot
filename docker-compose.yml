@@ -13,7 +13,7 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U docsbot -d docsbot"]
+      test: ['CMD-SHELL', 'pg_isready -U docsbot -d docsbot']
       interval: 5s
       timeout: 5s
       retries: 10
@@ -31,10 +31,10 @@ services:
       DATABASE_URL: postgres://docsbot:${POSTGRES_PASSWORD:-docsbot}@db:5432/docsbot
       APP_URL: ${APP_URL:-http://localhost:3100}
       INGEST_WORKER: inline
-      CRAWLER_ALLOW_PRIVATE_NETWORKS: "false"
+      CRAWLER_ALLOW_PRIVATE_NETWORKS: 'false'
       LOG_FORMAT: json
     ports:
-      - "3100:3100"
+      - '3100:3100'
 
 volumes:
   pgdata:

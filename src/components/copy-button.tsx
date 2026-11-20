@@ -1,8 +1,9 @@
-"use client";
+'use client';
 
-import { Check, Copy } from "lucide-react";
-import { useState } from "react";
-import { Button } from "@/components/ui";
+import { useState } from 'react';
+import { Copy, Check } from 'lucide-react';
+
+import { Button } from 'src/components/ui';
 
 export function CopyButton({ text, className }: { text: string; className?: string }) {
   const [copied, setCopied] = useState(false);
@@ -18,7 +19,7 @@ export function CopyButton({ text, className }: { text: string; className?: stri
         setTimeout(() => setCopied(false), 1500);
       }}
     >
-      {copied ? <Check /> : <Copy />} {copied ? "Copied" : "Copy"}
+      {copied ? <Check /> : <Copy />} {copied ? 'Copied' : 'Copy'}
     </Button>
   );
 }

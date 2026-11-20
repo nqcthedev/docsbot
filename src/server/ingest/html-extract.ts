@@ -1,5 +1,6 @@
-import * as cheerio from "cheerio";
-import type { AnyNode, Element } from "domhandler";
+import type { AnyNode, Element } from 'domhandler';
+
+import * as cheerio from 'cheerio';
 
 export type ExtractedPage = {
   title: string;
@@ -12,40 +13,87 @@ export type ExtractedPage = {
 };
 
 const DROP = [
-  "script", "style", "noscript", "template", "svg", "canvas", "iframe", "object", "embed",
-  "form", "button", "input", "select", "textarea", "nav", "header", "footer", "aside", "dialog",
-  "[role=navigation]", "[role=banner]", "[role=contentinfo]", "[aria-hidden=true]", "[hidden]",
-  ".cookie-banner", ".cookie", ".skip-link", ".sr-only", ".visually-hidden",
-].join(",");
+  'script',
+  'style',
+  'noscript',
+  'template',
+  'svg',
+  'canvas',
+  'iframe',
+  'object',
+  'embed',
+  'form',
+  'button',
+  'input',
+  'select',
+  'textarea',
+  'nav',
+  'header',
+  'footer',
+  'aside',
+  'dialog',
+  '[role=navigation]',
+  '[role=banner]',
+  '[role=contentinfo]',
+  '[aria-hidden=true]',
+  '[hidden]',
+  '.cookie-banner',
+  '.cookie',
+  '.skip-link',
+  '.sr-only',
+  '.visually-hidden',
+].join(',');
 
 const BLOCK = new Set([
-  "p", "div", "section", "article", "main", "blockquote", "figure", "figcaption", "address",
-  "ul", "ol", "dl", "dt", "dd", "details", "summary", "body", "html",
+  'p',
+  'div',
+  'section',
+  'article',
+  'main',
+  'blockquote',
+  'figure',
+  'figcaption',
+  'address',
+  'ul',
+  'ol',
+  'dl',
+  'dt',
+  'dd',
+  'details',
+  'summary',
+  'body',
+  'html',
 ]);
 
-const clean = (s: string) => s.replace(/\s+/g, " ").trim();
+const clean = (s: string) => s.replace(/\s+/g, ' ').trim();
 
 export function extractHtml(html: string, pageUrl: string): ExtractedPage {
   const $ = cheerio.load(html);
-  const robotsMeta = ($('meta[name="robots"]').attr("content") ?? "").toLowerCase();
-  const base = $("base[href]").attr("href");
+  const robotsMeta = ($('meta[name="robots"]').attr('content') ?? '').toLowerCase();
+  const base = $('base[href]').attr('href');
   const baseUrl = base ? new URL(base, pageUrl).toString() : pageUrl;
 
   const links = new Set<string>();
-  $("a[href]").each((_, el) => {
-    const href = $(el).attr("href")?.trim();
-    const rel = ($(el).attr("rel") ?? "").toLowerCase();
-    if (!href || href.startsWith("#") || /^(mailto|tel|javascript|data):/i.test(href) || rel.includes("nofollow")) return;
+  $('a[href]').each((_, el) => {
+    const href = $(el).attr('href')?.trim();
+    const rel = ($(el).attr('rel') ?? '').toLowerCase();
+    if (
+      !href ||
+      href.startsWith('#') ||
+      /^(mailto|tel|javascript|data):/i.test(href) ||
+      rel.includes('nofollow')
+    )
+      return;
     try {
       const u = new URL(href, baseUrl);
-      u.hash = "";
+      u.hash = '';
       links.add(u.toString());
     } catch {
       /* ignore malformed hrefs */
     }
   });
 
-  const canonicalHref = $('link[rel="canonical"]').attr("href");
+  const canonicalHref = $('link[rel="canonical"]').attr('href');
   let canonical: string | undefined;
   try {
     canonical = canonicalHref ? new URL(canonicalHref, baseUrl).toString() : undefined;
@@ -54,69 +102,78 @@ export function extractHtml(html: string, pageUrl: string): ExtractedPage {
   }
 
   const title =
-    clean($('meta[property="og:title"]').attr("content") ?? "") || clean($("title").first().text()) || clean($("h1").first().text()) || new URL(pageUrl).pathname;
+    clean($('meta[property="og:title"]').attr('content') ?? '') ||
+    clean($('title').first().text()) ||
+    clean($('h1').first().text()) ||
+    new URL(pageUrl).pathname;
 
   $(DROP).remove();
-  const root = $("main").first().length ? $("main").first() : $("article").first().length ? $("article").first() : $('[role="main"]').first().length ? $('[role="main"]').first() : $("body");
+  const root = $('main').first().length
+    ? $('main').first()
+    : $('article').first().length
+      ? $('article').first()
+      : $('[role="main"]').first().length
+        ? $('[role="main"]').first()
+        : $('body');
 
   const out: string[] = [];
-  let inline = "";
+  let inline = '';
   const flush = () => {
     const t = clean(inline);
     if (t) out.push(t);
-    inline = "";
+    inline = '';
   };
 
   const textOf = (el: Element) => clean($(el).text());
 
   const walk = (node: AnyNode) => {
-    if (node.type === "text") {
+    if (node.type === 'text') {
       inline += (node as unknown as { data: string }).data;
       return;
     }
-    if (node.type !== "tag") return;
+    if (node.type !== 'tag') return;
     const el = node as Element;
     const tag = el.tagName.toLowerCase();
     if (/^h[1-6]$/.test(tag)) {
       flush();
       const t = textOf(el);
-      if (t) out.push(`${"#".repeat(Number(tag[1]))} ${t}`);
+      if (t) out.push(`${'#'.repeat(Number(tag[1]))} ${t}`);
       return;
     }
-    if (tag === "br") {
-      inline += " ";
+    if (tag === 'br') {
+      inline += ' ';
       return;
     }
-    if (tag === "li") {
+    if (tag === 'li') {
       flush();
-      const nested = $(el).children("ul,ol");
-      const own = clean($(el).clone().children("ul,ol").remove().end().text());
+      const nested = $(el).children('ul,ol');
+      const own = clean($(el).clone().children('ul,ol').remove().end().text());
       if (own) out.push(`- ${own}`);
       nested.each((_, n) => walk(n));
       return;
     }
-    if (tag === "pre") {
+    if (tag === 'pre') {
       flush();
       const t = $(el).text().trim();
       if (t) out.push(t);
       return;
     }
-    if (tag === "table") {
+    if (tag === 'table') {
       flush();
       $(el)
-        .find("tr")
+        .find('tr')
         .each((_, tr) => {
           const cells = $(tr)
-            .children("th,td")
+            .children('th,td')
             .map((__, c) => clean($(c).text()))
             .get()
             .filter(Boolean);
-          if (cells.length) out.push(cells.join(" | "));
+          if (cells.length) out.push(cells.join(' | '));
         });
       return;
     }
-    if (tag === "img") {
-      const alt = clean($(el).attr("alt") ?? "");
+    if (tag === 'img') {
+      const alt = clean($(el).attr('alt') ?? '');
       if (alt) inline += ` ${alt} `;
       return;
     }
@@ -133,10 +190,10 @@ export function extractHtml(html: string, pageUrl: string): ExtractedPage {
   const deduped = out.filter((line, i) => line !== out[i - 1]);
   return {
     title,
-    markdown: deduped.join("\n\n"),
+    markdown: deduped.join('\n\n'),
     links: [...links],
-    noindex: robotsMeta.includes("noindex"),
-    nofollow: robotsMeta.includes("nofollow"),
+    noindex: robotsMeta.includes('noindex'),
+    nofollow: robotsMeta.includes('nofollow'),
     canonical,
   };
 }

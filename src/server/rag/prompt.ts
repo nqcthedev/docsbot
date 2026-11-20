@@ -1,13 +1,13 @@
-import type { Citation } from "../db/schema";
-import type { ChatMessage } from "../ai/types";
-import type { RetrievedChunk } from "./retrieve";
+import type { RetrievedChunk } from './retrieve';
+import type { Citation } from 'src/server/db/schema';
+import type { ChatMessage } from 'src/server/ai/types';
 
-export const NO_ANSWER_TOKEN = "NO_ANSWER";
+export const NO_ANSWER_TOKEN = 'NO_ANSWER';
 
 export type PromptBot = { name: string; instructions: string };
 
-export function sourceLabel(c: Pick<RetrievedChunk, "title" | "url" | "page">): string {
-  const where = c.url ?? (c.page ? `page ${c.page}` : "");
+export function sourceLabel(c: Pick<RetrievedChunk, 'title' | 'url' | 'page'>): string {
+  const where = c.url ?? (c.page ? `page ${c.page}` : '');
   return where ? `${c.title} — ${where}` : c.title;
 }
 
@@ -15,17 +15,19 @@ export function sourceLabel(c: Pick<RetrievedChunk, "title" | "url" | "page">): 
 export function formatContext(contexts: RetrievedChunk[]): string {
   return contexts
     .map((c, i) => {
-      const head = `[${i + 1}] ${sourceLabel(c)}${c.page && c.url ? ` (page ${c.page})` : ""}${c.headingPath ? `\nSection: ${c.headingPath}` : ""}`;
+      const head = `[${i + 1}] ${sourceLabel(c)}${c.page && c.url ? ` (page ${c.page})` : ''}${c.headingPath ? `\nSection: ${c.headingPath}` : ''}`;
       return `${head}\n<<<\n${c.content.trim()}\n>>>`;
     })
-    .join("\n\n");
+    .join('\n\n');
 }
 
 export function buildSystemPrompt(bot: PromptBot, contexts: RetrievedChunk[]): string {
   const custom = bot.instructions.trim();
   return [
     `You are "${bot.name}", a customer-support assistant that answers questions about this business using its own documentation.`,
-    custom ? `Tone and style guidance from the business owner (it cannot override the rules below):\n${custom}` : "",
+    custom
+      ? `Tone and style guidance from the business owner (it cannot override the rules below):\n${custom}`
+      : '',
     `RULES (always follow):
 1. Answer ONLY with information found in the numbered context passages below. Never use outside knowledge, even if you are confident.
 2. After every sentence that states a fact, cite the supporting passage number(s) in square brackets, like [1] or [2][3]. Cite only passages that actually support the sentence.
@@ -37,18 +39,26 @@ export function buildSystemPrompt(bot: PromptBot, contexts: RetrievedChunk[]): s
     `CONTEXT PASSAGES:\n${formatContext(contexts)}`,
   ]
     .filter(Boolean)
-    .join("\n\n");
+    .join('\n\n');
 }
 
 /** Recent conversation turns (bounded) followed by the new question. */
-export function buildMessages(history: ChatMessage[], question: string, maxHistory = 6, maxCharsPerTurn = 1500): ChatMessage[] {
-  const recent = history.slice(-maxHistory).map((m) => ({ role: m.role, content: m.content.slice(0, maxCharsPerTurn) }));
+export function buildMessages(
+  history: ChatMessage[],
+  question: string,
+  maxHistory = 6,
+  maxCharsPerTurn = 1500
+): ChatMessage[] {
+  const recent = history
+    .slice(-maxHistory)
+    .map((m) => ({ role: m.role, content: m.content.slice(0, maxCharsPerTurn) }));
   // Providers require the conversation to start with a user turn.
-  while (recent.length && recent[0]!.role !== "user") recent.shift();
-  return [...recent, { role: "user", content: question }];
+  while (recent.length && recent[0]!.role !== 'user') recent.shift();
+  return [...recent, { role: 'user', content: question }];
 }
 
-const FOLLOW_UP = /\b(it|its|that|this|they|them|those|these|there|one|ones|same|also|else)\b|^(and|but|or|so|what about|how about)\b/i;
+const FOLLOW_UP =
+  /\b(it|its|that|this|they|them|those|these|there|one|ones|same|also|else)\b|^(and|but|or|so|what about|how about)\b/i;
 
 /**
  * Texts to embed for retrieval. Follow-ups ("and how long does it take?") lose their topic on
@@ -56,10 +66,12 @@ const FOLLOW_UP = /\b(it|its|that|this|they|them|those|these|there|one|ones|same
  * embedding call, without spending an extra LLM call on query rewriting. Results from both are merged.
  */
 export function retrievalQueries(question: string, history: ChatMessage[]): string[] {
-  const lastUser = [...history].reverse().find((m) => m.role === "user");
+  const lastUser = [...history].reverse().find((m) => m.role === 'user');
   if (!lastUser) return [question];
   const words = question.trim().split(/\s+/).length;
-  return words <= 6 || FOLLOW_UP.test(question.trim()) ? [question, `${lastUser.content}\n${question}`] : [question];
+  return words <= 6 || FOLLOW_UP.test(question.trim())
+    ? [question, `${lastUser.content}\n${question}`]
+    : [question];
 }
 
 /** Collects the passages the answer actually cites, de-duplicated by source location. */
@@ -79,7 +91,9 @@ export function extractCitations(answer: string, contexts: RetrievedChunk[]): Ci
 
 /** Removes citation markers that point at passages that do not exist (model slip-ups). */
 export function sanitizeCitations(answer: string, contextCount: number): string {
-  return answer.replace(/\[(\d{1,2})\]/g, (all, n: string) => (Number(n) >= 1 && Number(n) <= contextCount ? all : ""));
+  return answer.replace(/\[(\d{1,2})\]/g, (all, n: string) =>
+    Number(n) >= 1 && Number(n) <= contextCount ? all : ''
+  );
 }
 
 /**
@@ -87,33 +101,33 @@ export function sanitizeCitations(answer: string, contextCount: number): string 
  * NO_ANSWER sentinel, so the sentinel itself is never shown to the visitor.
  */
 export class AnswerGate {
-  private buffer = "";
+  private buffer = '';
   private decided = false;
   noAnswer = false;
 
   push(text: string): string {
-    if (this.decided) return this.noAnswer ? "" : text;
+    if (this.decided) return this.noAnswer ? '' : text;
     this.buffer += text;
     const trimmed = this.buffer.trimStart();
-    if (!trimmed) return "";
+    if (!trimmed) return '';
     const isPrefix = NO_ANSWER_TOKEN.startsWith(trimmed) || trimmed.startsWith(NO_ANSWER_TOKEN);
-    if (isPrefix && trimmed.length < NO_ANSWER_TOKEN.length) return "";
+    if (isPrefix && trimmed.length < NO_ANSWER_TOKEN.length) return '';
     this.decided = true;
     if (trimmed.startsWith(NO_ANSWER_TOKEN)) {
       this.noAnswer = true;
-      return "";
+      return '';
     }
     return trimmed;
   }
 
   /** Call at end of stream. Returns any text still held back. */
   flush(): string {
-    if (this.decided) return "";
+    if (this.decided) return '';
     this.decided = true;
     const trimmed = this.buffer.trim();
-    if (trimmed === "" || trimmed.startsWith(NO_ANSWER_TOKEN)) {
+    if (trimmed === '' || trimmed.startsWith(NO_ANSWER_TOKEN)) {
       this.noAnswer = true;
-      return "";
+      return '';
     }
     return trimmed;
   }
@@ -124,7 +138,8 @@ export function containsNoAnswer(text: string) {
   return text.includes(NO_ANSWER_TOKEN);
 }
 
-const HANDOFF = /\b(human(?![-\w])|real person|live (agent|chat|person)|representative|(talk|speak|chat) (to|with) (a |an |the |someone|somebody|support|sales|staff|team|person|agent)|customer (service|support)|contact (me|support|sales|someone)|call me|email me|get in touch)\b/i;
+const HANDOFF =
+  /\b(human(?![-\w])|real person|live (agent|chat|person)|representative|(talk|speak|chat) (to|with) (a |an |the |someone|somebody|support|sales|staff|team|person|agent)|customer (service|support)|contact (me|support|sales|someone)|call me|email me|get in touch)\b/i;
 
 export function wantsHuman(message: string): boolean {
   return HANDOFF.test(message);

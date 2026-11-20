@@ -1,14 +1,15 @@
-import { eq } from "drizzle-orm";
-import { getCurrentUser } from "@/server/auth/session";
-import { getDb } from "@/server/db";
-import { bots } from "@/server/db/schema";
-import { frameAncestors, isOriginAllowed } from "@/server/domains";
-import { escapeHtml } from "@/shared/markdown";
+import { eq } from 'drizzle-orm';
 
-export const runtime = "nodejs";
-export const dynamic = "force-dynamic";
+import { getDb } from 'src/server/db';
+import { bots } from 'src/server/db/schema';
+import { escapeHtml } from 'src/shared/markdown';
+import { getCurrentUser } from 'src/server/auth/session';
+import { frameAncestors, isOriginAllowed } from 'src/server/domains';
 
-type Mode = "widget" | "playground" | "standalone";
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
+type Mode = 'widget' | 'playground' | 'standalone';
 
 /**
  * The chat UI that runs inside the widget iframe (and the dashboard playground). Served as a
@@ -18,21 +19,43 @@ type Mode = "widget" | "playground" | "standalone";
 export async function GET(req: Request, { params }: { params: Promise<{ botId: string }> }) {
   const { botId } = await params;
   const url = new URL(req.url);
-  const mode: Mode = url.searchParams.get("mode") === "playground" ? "playground" : url.searchParams.get("mode") === "standalone" ? "standalone" : "widget";
-  const pageOrigin = url.searchParams.get("origin")?.slice(0, 300) ?? null;
+  const mode: Mode =
+    url.searchParams.get('mode') === 'playground'
+      ? 'playground'
+      : url.searchParams.get('mode') === 'standalone'
+        ? 'standalone'
+        : 'widget';
+  const pageOrigin = url.searchParams.get('origin')?.slice(0, 300) ?? null;
 
   const db = await getDb();
   const [bot] = /^[0-9a-f-]{36}$/i.test(botId)
-    ? await db.select({ id: bots.id, name: bots.name, brandColor: bots.brandColor, welcomeMessage: bots.welcomeMessage, allowedDomains: bots.allowedDomains, workspaceId: bots.workspaceId, leadCaptureEnabled: bots.leadCaptureEnabled }).from(bots).where(eq(bots.id, botId))
+    ? await db
+        .select({
+          id: bots.id,
+          name: bots.name,
+          brandColor: bots.brandColor,
+          welcomeMessage: bots.welcomeMessage,
+          allowedDomains: bots.allowedDomains,
+          workspaceId: bots.workspaceId,
+          leadCaptureEnabled: bots.leadCaptureEnabled,
+        })
+        .from(bots)
+        .where(eq(bots.id, botId))
     : [];
-  if (!bot) return new Response("<!doctype html><title>Not found</title><p>Bot not found.</p>", { status: 404, headers: { "content-type": "text/html" } });
+  if (!bot)
+    return new Response('<!doctype html><title>Not found</title><p>Bot not found.</p>', {
+      status: 404,
+      headers: { 'content-type': 'text/html' },
+    });
 
-  if (mode === "playground") {
+  if (mode === 'playground') {
     const user = await getCurrentUser();
-    if (!user || user.workspaceId !== bot.workspaceId) return new Response("Forbidden", { status: 403 });
+    if (!user || user.workspaceId !== bot.workspaceId)
+      return new Response('Forbidden', { status: 403 });
   }
 
-  const blocked = mode === "widget" && pageOrigin && !isOriginAllowed(pageOrigin, bot.allowedDomains);
+  const blocked =
+    mode === 'widget' && pageOrigin && !isOriginAllowed(pageOrigin, bot.allowedDomains);
   const config = {
     botId: bot.id,
     name: bot.name,
@@ -44,8 +67,13 @@ export async function GET(req: Request, { params }: { params: Promise<{ botId: s
     blocked: Boolean(blocked),
   };
   // JSON inside <script type="application/json"> must not be able to close the tag.
-  const json = JSON.stringify(config).replace(/</g, "\\u003c");
-  const ancestors = mode === "widget" ? frameAncestors(bot.allowedDomains) : mode === "playground" ? "frame-ancestors 'self'" : "frame-ancestors 'none'";
+  const json = JSON.stringify(config).replace(/</g, '\\u003c');
+  const ancestors =
+    mode === 'widget'
+      ? frameAncestors(bot.allowedDomains)
+      : mode === 'playground'
+        ? "frame-ancestors 'self'"
+        : "frame-ancestors 'none'";
   const csp = [
     "default-src 'none'",
     "script-src 'self'",
@@ -55,7 +83,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ botId: s
     "base-uri 'none'",
     "form-action 'none'",
     ancestors,
-  ].join("; ");
+  ].join('; ');
 
   const html = `<!doctype html>
 <html lang="en">
@@ -65,7 +93,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ botId: s
 <meta name="robots" content="noindex">
 <title>${escapeHtml(bot.name)}</title>
 <link rel="stylesheet" href="/widget/chat.css">
-<style>:root{--brand:${/^#[0-9a-f]{6}$/i.test(bot.brandColor) ? bot.brandColor : "#4f46e5"}}</style>
+<style>:root{--brand:${/^#[0-9a-f]{6}$/i.test(bot.brandColor) ? bot.brandColor : '#4f46e5'}}</style>
 </head>
 <body class="mode-${mode}">
 <div id="app"></div>
@@ -76,11 +104,11 @@ export async function GET(req: Request, { params }: { params: Promise<{ botId: s
 
   return new Response(html, {
     headers: {
-      "content-type": "text/html; charset=utf-8",
-      "content-security-policy": csp,
-      "cache-control": "no-store",
-      "x-content-type-options": "nosniff",
-      "referrer-policy": "strict-origin-when-cross-origin",
+      'content-type': 'text/html; charset=utf-8',
+      'content-security-policy': csp,
+      'cache-control': 'no-store',
+      'x-content-type-options': 'nosniff',
+      'referrer-policy': 'strict-origin-when-cross-origin',
     },
   });
 }

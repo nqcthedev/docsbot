@@ -1,0 +1,7 @@
+# Generated, vendored or fixture content (fixtures are crawled by tests byte for byte).
+pnpm-lock.yaml
+drizzle/
+fixtures/
+docs/
+public/
+*.md

@@ -1,5 +1,6 @@
-import { describe, expect, it } from "vitest";
-import { extractHtml } from "@/server/ingest/html-extract";
+import { it, expect, describe } from 'vitest';
+
+import { extractHtml } from 'src/server/ingest/html-extract';
 
 const html = `<!doctype html><html><head>
 <title>Shipping | Northwind</title>
@@ -24,52 +25,58 @@ const html = `<!doctype html><html><head>
 <footer>© 2026 <a href="/about">About</a></footer>
 </body></html>`;
 
-describe("extractHtml", () => {
-  const page = extractHtml(html, "https://shop.example/shipping");
+describe('extractHtml', () => {
+  const page = extractHtml(html, 'https://shop.example/shipping');
 
-  it("extracts title and canonical URL", () => {
-    expect(page.title).toBe("Shipping | Northwind");
-    expect(page.canonical).toBe("https://shop.example/shipping");
+  it('extracts title and canonical URL', () => {
+    expect(page.title).toBe('Shipping | Northwind');
+    expect(page.canonical).toBe('https://shop.example/shipping');
   });
 
-  it("produces markdown with headings, tables and nested lists from the main content only", () => {
-    expect(page.markdown).toContain("# Shipping Information");
-    expect(page.markdown).toContain("## United States");
-    expect(page.markdown).toContain("Method | Cost");
-    expect(page.markdown).toContain("Standard | $5.95");
-    expect(page.markdown).toContain("- Free over $45");
-    expect(page.markdown).toContain("- Before tax");
-    expect(page.markdown).toContain("We roast on Mondays and ship the same day.");
-    expect(page.markdown).toContain("Map of delivery zones");
+  it('produces markdown with headings, tables and nested lists from the main content only', () => {
+    expect(page.markdown).toContain('# Shipping Information');
+    expect(page.markdown).toContain('## United States');
+    expect(page.markdown).toContain('Method | Cost');
+    expect(page.markdown).toContain('Standard | $5.95');
+    expect(page.markdown).toContain('- Free over $45');
+    expect(page.markdown).toContain('- Before tax');
+    expect(page.markdown).toContain('We roast on Mondays and ship the same day.');
+    expect(page.markdown).toContain('Map of delivery zones');
   });
 
-  it("drops navigation, footer, scripts, styles and cookie banners", () => {
-    expect(page.markdown).not.toContain("Our Coffee");
-    expect(page.markdown).not.toContain("alert");
-    expect(page.markdown).not.toContain("color:red");
-    expect(page.markdown).not.toContain("cookies");
-    expect(page.markdown).not.toContain("2026");
+  it('drops navigation, footer, scripts, styles and cookie banners', () => {
+    expect(page.markdown).not.toContain('Our Coffee');
+    expect(page.markdown).not.toContain('alert');
+    expect(page.markdown).not.toContain('color:red');
+    expect(page.markdown).not.toContain('cookies');
+    expect(page.markdown).not.toContain('2026');
   });
 
-  it("collects absolute links (including nav) but skips mailto, fragments-only and rel=nofollow", () => {
-    expect(page.links).toContain("https://shop.example/coffee");
-    expect(page.links).toContain("https://shop.example/faq");
-    expect(page.links).toContain("https://shop.example/returns");
-    expect(page.links).toContain("https://shop.example/about");
-    expect(page.links.some((l) => l.startsWith("mailto:"))).toBe(false);
-    expect(page.links).not.toContain("https://other.example/x");
+  it('collects absolute links (including nav) but skips mailto, fragments-only and rel=nofollow', () => {
+    expect(page.links).toContain('https://shop.example/coffee');
+    expect(page.links).toContain('https://shop.example/faq');
+    expect(page.links).toContain('https://shop.example/returns');
+    expect(page.links).toContain('https://shop.example/about');
+    expect(page.links.some((l) => l.startsWith('mailto:'))).toBe(false);
+    expect(page.links).not.toContain('https://other.example/x');
   });
 
-  it("detects meta robots noindex/nofollow", () => {
-    const p = extractHtml('<html><head><meta name="robots" content="noindex, nofollow"></head><body><p>x</p></body></html>', "https://a.example/");
+  it('detects meta robots noindex/nofollow', () => {
+    const p = extractHtml(
+      '<html><head><meta name="robots" content="noindex, nofollow"></head><body><p>x</p></body></html>',
+      'https://a.example/'
+    );
     expect(p.noindex).toBe(true);
     expect(p.nofollow).toBe(true);
     expect(page.noindex).toBe(false);
   });
 
-  it("falls back to body when there is no main element", () => {
-    const p = extractHtml("<html><body><div><h2>Hours</h2><p>Open 7am</p></div></body></html>", "https://a.example/");
-    expect(p.markdown).toBe("## Hours\n\nOpen 7am");
-    expect(p.title).toBe("/");
+  it('falls back to body when there is no main element', () => {
+    const p = extractHtml(
+      '<html><body><div><h2>Hours</h2><p>Open 7am</p></div></body></html>',
+      'https://a.example/'
+    );
+    expect(p.markdown).toBe('## Hours\n\nOpen 7am');
+    expect(p.title).toBe('/');
   });
 });

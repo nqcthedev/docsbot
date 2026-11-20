@@ -1,14 +1,19 @@
-import "server-only";
-import { and, count, desc, eq, gte, inArray, ne, sql, sum } from "drizzle-orm";
-import { notFound, redirect } from "next/navigation";
-import { getCurrentUser, type CurrentUser } from "./auth/session";
-import { getDb, queryRows } from "./db";
-import { bots, chunks, conversations, leads, messages, sources, usageEvents, type Bot } from "./db/schema";
-import { registry } from "./ai/registry";
+import 'server-only';
+
+import type { Bot } from './db/schema';
+import type { CurrentUser } from './auth/session';
+
+import { notFound, redirect } from 'next/navigation';
+import { eq, ne, and, gte, sql, sum, desc, count, inArray } from 'drizzle-orm';
+
+import { getDb, queryRows } from './db';
+import { registry } from './ai/registry';
+import { getCurrentUser } from './auth/session';
+import { bots, leads, chunks, sources, messages, usageEvents, conversations } from './db/schema';
 
 export async function requireUser(): Promise<CurrentUser> {
   const user = await getCurrentUser();
-  if (!user) redirect("/login");
+  if (!user) redirect('/login');
   return user;
 }
 
@@ -27,15 +32,35 @@ export async function requireBot(botId: string): Promise<{ user: CurrentUser; bo
 
 export async function listBotsWithStats(workspaceId: string) {
   const db = await getDb();
-  const rows = await db.select().from(bots).where(eq(bots.workspaceId, workspaceId)).orderBy(desc(bots.createdAt));
+  const rows = await db
+    .select()
+    .from(bots)
+    .where(eq(bots.workspaceId, workspaceId))
+    .orderBy(desc(bots.createdAt));
   if (!rows.length) return [];
   const ids = rows.map((b) => b.id);
   const since = new Date(Date.now() - 30 * 86_400_000);
   const [convs, leadRows, srcRows, cost] = await Promise.all([
-    db.select({ botId: conversations.botId, n: count() }).from(conversations).where(and(inArray(conversations.botId, ids), gte(conversations.createdAt, since))).groupBy(conversations.botId),
-    db.select({ botId: leads.botId, n: count() }).from(leads).where(inArray(leads.botId, ids)).groupBy(leads.botId),
-    db.select({ botId: sources.botId, n: count(), chunks: sum(sources.chunkCount) }).from(sources).where(inArray(sources.botId, ids)).groupBy(sources.botId),
-    db.select({ botId: usageEvents.botId, usd: sum(usageEvents.costUsd) }).from(usageEvents).where(and(inArray(usageEvents.botId, ids), gte(usageEvents.createdAt, since))).groupBy(usageEvents.botId),
+    db
+      .select({ botId: conversations.botId, n: count() })
+      .from(conversations)
+      .where(and(inArray(conversations.botId, ids), gte(conversations.createdAt, since)))
+      .groupBy(conversations.botId),
+    db
+      .select({ botId: leads.botId, n: count() })
+      .from(leads)
+      .where(inArray(leads.botId, ids))
+      .groupBy(leads.botId),
+    db
+      .select({ botId: sources.botId, n: count(), chunks: sum(sources.chunkCount) })
+      .from(sources)
+      .where(inArray(sources.botId, ids))
+      .groupBy(sources.botId),
+    db
+      .select({ botId: usageEvents.botId, usd: sum(usageEvents.costUsd) })
+      .from(usageEvents)
+      .where(and(inArray(usageEvents.botId, ids), gte(usageEvents.createdAt, since)))
+      .groupBy(usageEvents.botId),
   ]);
   const by = <T extends { botId: string }>(list: T[]) => new Map(list.map((r) => [r.botId, r]));
   const c = by(convs);
@@ -82,7 +107,10 @@ export async function staleChunkCount(botId: string) {
   const model = registry().embeddings?.model;
   if (!model) return 0;
   const db = await getDb();
-  const [row] = await db.select({ n: count() }).from(chunks).where(and(eq(chunks.botId, botId), ne(chunks.embeddingModel, model)));
+  const [row] = await db
+    .select({ n: count() })
+    .from(chunks)
+    .where(and(eq(chunks.botId, botId), ne(chunks.embeddingModel, model)));
   return Number(row?.n ?? 0);
 }
 
@@ -91,46 +119,83 @@ export type BotAnalytics = Awaited<ReturnType<typeof botAnalytics>>;
 export async function botAnalytics(botId: string, days = 30) {
   const db = await getDb();
   const since = new Date(Date.now() - days * 86_400_000);
-  const assistant = and(eq(messages.botId, botId), eq(messages.role, "assistant"), gte(messages.createdAt, since));
+  const assistant = and(
+    eq(messages.botId, botId),
+    eq(messages.role, 'assistant'),
+    gte(messages.createdAt, since)
+  );
 
-  const [convCount, outcomeRows, leadCount, usageRows, daily, topQuestions, unanswered] = await Promise.all([
-    db.select({ n: count() }).from(conversations).where(and(eq(conversations.botId, botId), gte(conversations.createdAt, since))),
-    db.select({ outcome: messages.outcome, n: count() }).from(messages).where(assistant).groupBy(messages.outcome),
-    db.select({ n: count() }).from(leads).where(and(eq(leads.botId, botId), gte(leads.createdAt, since))),
-    db
-      .select({ kind: usageEvents.kind, model: usageEvents.model, input: sum(usageEvents.inputTokens), output: sum(usageEvents.outputTokens), usd: sum(usageEvents.costUsd), n: count() })
-      .from(usageEvents)
-      .where(and(eq(usageEvents.botId, botId), gte(usageEvents.createdAt, since)))
-      .groupBy(usageEvents.kind, usageEvents.model),
-    queryRows<{ day: string; conversations: number }>(
-      db,
-      sql`SELECT to_char(date_trunc('day', created_at), 'YYYY-MM-DD') AS day, count(*)::int AS conversations
+  const [convCount, outcomeRows, leadCount, usageRows, daily, topQuestions, unanswered] =
+    await Promise.all([
+      db
+        .select({ n: count() })
+        .from(conversations)
+        .where(and(eq(conversations.botId, botId), gte(conversations.createdAt, since))),
+      db
+        .select({ outcome: messages.outcome, n: count() })
+        .from(messages)
+        .where(assistant)
+        .groupBy(messages.outcome),
+      db
+        .select({ n: count() })
+        .from(leads)
+        .where(and(eq(leads.botId, botId), gte(leads.createdAt, since))),
+      db
+        .select({
+          kind: usageEvents.kind,
+          model: usageEvents.model,
+          input: sum(usageEvents.inputTokens),
+          output: sum(usageEvents.outputTokens),
+          usd: sum(usageEvents.costUsd),
+          n: count(),
+        })
+        .from(usageEvents)
+        .where(and(eq(usageEvents.botId, botId), gte(usageEvents.createdAt, since)))
+        .groupBy(usageEvents.kind, usageEvents.model),
+      queryRows<{ day: string; conversations: number }>(
+        db,
+        sql`SELECT to_char(date_trunc('day', created_at), 'YYYY-MM-DD') AS day, count(*)::int AS conversations
           FROM conversations WHERE bot_id = ${botId} AND created_at >= ${since.toISOString()}
-          GROUP BY 1 ORDER BY 1`,
-    ),
-    // "Top questions": user messages grouped by a normalised form of the text.
-    queryRows<{ question: string; asked: number; last_asked: string }>(
-      db,
-      sql`SELECT min(content) AS question, count(*)::int AS asked, max(created_at)::text AS last_asked
+          GROUP BY 1 ORDER BY 1`
+      ),
+      // "Top questions": user messages grouped by a normalised form of the text.
+      queryRows<{ question: string; asked: number; last_asked: string }>(
+        db,
+        sql`SELECT min(content) AS question, count(*)::int AS asked, max(created_at)::text AS last_asked
           FROM messages WHERE bot_id = ${botId} AND role = 'user' AND created_at >= ${since.toISOString()}
           GROUP BY lower(regexp_replace(trim(content), '[[:punct:][:space:]]+', ' ', 'g'))
-          ORDER BY asked DESC, last_asked DESC LIMIT 8`,
-    ),
-    // Unanswered: the user question that preceded each declined assistant reply.
-    queryRows<{ question: string; outcome: string; created_at: string; conversation_id: string; confidence: number | null }>(
-      db,
-      sql`SELECT (SELECT u.content FROM messages u WHERE u.conversation_id = a.conversation_id AND u.role = 'user' AND u.created_at <= a.created_at ORDER BY u.created_at DESC LIMIT 1) AS question,
+          ORDER BY asked DESC, last_asked DESC LIMIT 8`
+      ),
+      // Unanswered: the user question that preceded each declined assistant reply.
+      queryRows<{
+        question: string;
+        outcome: string;
+        created_at: string;
+        conversation_id: string;
+        confidence: number | null;
+      }>(
+        db,
+        sql`SELECT (SELECT u.content FROM messages u WHERE u.conversation_id = a.conversation_id AND u.role = 'user' AND u.created_at <= a.created_at ORDER BY u.created_at DESC LIMIT 1) AS question,
                  a.outcome, a.created_at::text AS created_at, a.conversation_id, a.confidence
           FROM messages a
           WHERE a.bot_id = ${botId} AND a.role = 'assistant' AND a.outcome IN ('low_confidence', 'no_answer') AND a.created_at >= ${since.toISOString()}
-          ORDER BY a.created_at DESC LIMIT 8`,
-    ),
-  ]);
+          ORDER BY a.created_at DESC LIMIT 8`
+      ),
+    ]);
 
-  const outcomes = Object.fromEntries(outcomeRows.map((r) => [r.outcome ?? "unknown", Number(r.n)])) as Record<string, number>;
+  const outcomes = Object.fromEntries(
+    outcomeRows.map((r) => [r.outcome ?? 'unknown', Number(r.n)])
+  ) as Record<string, number>;
   const replies = Object.values(outcomes).reduce((a, b) => a + b, 0);
   const unansweredCount = (outcomes.low_confidence ?? 0) + (outcomes.no_answer ?? 0);
-  const usage = usageRows.map((r) => ({ kind: r.kind, model: r.model, inputTokens: Number(r.input ?? 0), outputTokens: Number(r.output ?? 0), costUsd: Number(r.usd ?? 0), calls: Number(r.n) }));
+  const usage = usageRows.map((r) => ({
+    kind: r.kind,
+    model: r.model,
+    inputTokens: Number(r.input ?? 0),
+    outputTokens: Number(r.output ?? 0),
+    costUsd: Number(r.usd ?? 0),
+    calls: Number(r.n),
+  }));
 
   // Fill missing days so the chart has a bar for every day in range.
   const dayMap = new Map(daily.map((d) => [d.day, Number(d.conversations)]));
@@ -155,6 +220,14 @@ export async function botAnalytics(botId: string, days = 30) {
     totalTokens: usage.reduce((a, u) => a + u.inputTokens + u.outputTokens, 0),
     series,
     topQuestions: topQuestions.map((q) => ({ question: q.question, asked: Number(q.asked) })),
-    unansweredQuestions: unanswered.filter((u) => u.question).map((u) => ({ question: u.question, outcome: u.outcome, createdAt: u.created_at, conversationId: u.conversation_id, confidence: u.confidence })),
+    unansweredQuestions: unanswered
+      .filter((u) => u.question)
+      .map((u) => ({
+        question: u.question,
+        outcome: u.outcome,
+        createdAt: u.created_at,
+        conversationId: u.conversation_id,
+        confidence: u.confidence,
+      })),
   };
 }

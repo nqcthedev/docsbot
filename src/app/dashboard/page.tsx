@@ -1,11 +1,14 @@
-import { Bot as BotIcon, Database, MessageSquare, Users } from "lucide-react";
-import Link from "next/link";
-import { Badge, Card, EmptyState } from "@/components/ui";
-import { formatNumber, formatUsd } from "@/lib/utils";
-import { listBotsWithStats, requireUser } from "@/server/data";
-import { CreateBotForm } from "./create-bot-form";
+import Link from 'next/link';
+import { Users, Database, MessageSquare, Bot as BotIcon } from 'lucide-react';
 
-export const metadata = { title: "Bots" };
+import { formatUsd, formatNumber } from 'src/lib/utils';
+import { requireUser, listBotsWithStats } from 'src/server/data';
+
+import { Card, Badge, EmptyState } from 'src/components/ui';
+
+import { CreateBotForm } from './create-bot-form';
+
+export const metadata = { title: 'Bots' };
 
 export default async function DashboardHome() {
   const user = await requireUser();
@@ -16,7 +19,9 @@ export default async function DashboardHome() {
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Your bots</h1>
-          <p className="mt-1 text-sm text-zinc-500">Each bot has its own knowledge sources, settings, widget and analytics.</p>
+          <p className="mt-1 text-sm text-zinc-500">
+            Each bot has its own knowledge sources, settings, widget and analytics.
+          </p>
         </div>
         <CreateBotForm />
       </div>
@@ -24,7 +29,8 @@ export default async function DashboardHome() {
       {list.length === 0 ? (
         <Card>
           <EmptyState icon={<BotIcon />} title="No bots yet">
-            Create a bot, point it at your website or upload a PDF, and embed it with one line of HTML.
+            Create a bot, point it at your website or upload a PDF, and embed it with one line of
+            HTML.
           </EmptyState>
         </Card>
       ) : (
@@ -34,7 +40,10 @@ export default async function DashboardHome() {
               <Card className="h-full p-5 transition-shadow group-hover:shadow-md">
                 <div className="flex items-start justify-between">
                   <div className="flex items-center gap-3">
-                    <span className="grid size-10 place-items-center rounded-xl text-white" style={{ backgroundColor: bot.brandColor }}>
+                    <span
+                      className="grid size-10 place-items-center rounded-xl text-white"
+                      style={{ backgroundColor: bot.brandColor }}
+                    >
                       <BotIcon className="size-5" />
                     </span>
                     <div>
@@ -42,10 +51,18 @@ export default async function DashboardHome() {
                       <p className="text-xs text-zinc-500">{bot.chatModel}</p>
                     </div>
                   </div>
-                  {chunks > 0 ? <Badge tone="green">Trained</Badge> : <Badge tone="amber">No content</Badge>}
+                  {chunks > 0 ? (
+                    <Badge tone="green">Trained</Badge>
+                  ) : (
+                    <Badge tone="amber">No content</Badge>
+                  )}
                 </div>
                 <dl className="mt-5 grid grid-cols-3 gap-2 text-sm">
-                  <Stat icon={<MessageSquare />} label="Chats (30d)" value={formatNumber(conversations30d)} />
+                  <Stat
+                    icon={<MessageSquare />}
+                    label="Chats (30d)"
+                    value={formatNumber(conversations30d)}
+                  />
                   <Stat icon={<Users />} label="Leads" value={formatNumber(leads)} />
                   <Stat icon={<Database />} label="Sources" value={formatNumber(sources)} />
                 </dl>

@@ -1,10 +1,11 @@
-import { redirect } from "next/navigation";
-import { getCurrentUser } from "@/server/auth/session";
-import { SignupForm } from "../auth-forms";
+import { redirect } from 'next/navigation';
 
-export const metadata = { title: "Sign up" };
+import { SignupForm } from 'src/app/(auth)/auth-forms';
+import { getCurrentUser } from 'src/server/auth/session';
+
+export const metadata = { title: 'Sign up' };
 
 export default async function SignupPage() {
-  if (await getCurrentUser()) redirect("/dashboard");
+  if (await getCurrentUser()) redirect('/dashboard');
   return <SignupForm />;
 }

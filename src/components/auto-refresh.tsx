@@ -1,7 +1,7 @@
-"use client";
+'use client';
 
-import { useRouter } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 
 /** Re-renders the current server component tree on an interval (used while sources are ingesting). */
 export function AutoRefresh({ intervalMs = 2000 }: { intervalMs?: number }) {

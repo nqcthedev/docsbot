@@ -4,12 +4,12 @@ export class AppError extends Error {
     public readonly code: string,
     message: string,
     public readonly status = 400,
-    public readonly details?: unknown,
+    public readonly details?: unknown
   ) {
     super(message);
-    this.name = "AppError";
+    this.name = 'AppError';
   }
 }
 
-export const notFound = (what = "Resource") => new AppError("not_found", `${what} not found`, 404);
-export const forbidden = (message = "Forbidden") => new AppError("forbidden", message, 403);
+export const notFound = (what = 'Resource') => new AppError('not_found', `${what} not found`, 404);
+export const forbidden = (message = 'Forbidden') => new AppError('forbidden', message, 403);

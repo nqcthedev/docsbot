@@ -1,8 +1,11 @@
-import { EMBEDDING_DIMENSIONS } from "../db/schema";
-import { backoffDelay } from "./fallback";
-import { networkError, timeoutSignal, toProviderError } from "./http";
-import { joinUrl } from "./openai-compatible";
-import { ProviderError, estimateTokens, type EmbeddingProvider, type EmbeddingResult, type FetchLike, type ProviderName } from "./types";
+import type { FetchLike, ProviderName, EmbeddingResult, EmbeddingProvider } from './types';
+
+import { EMBEDDING_DIMENSIONS } from 'src/server/db/schema';
+
+import { backoffDelay } from './fallback';
+import { joinUrl } from './openai-compatible';
+import { ProviderError, estimateTokens } from './types';
+import { networkError, timeoutSignal, toProviderError } from './http';
 
 export type OpenAICompatibleEmbeddingOptions = {
   name: ProviderName;
@@ -61,9 +64,12 @@ export class OpenAICompatibleEmbeddings implements EmbeddingProvider {
       try {
         let res: Response;
         try {
-          res = await f(joinUrl(this.opts.baseUrl, "embeddings"), {
-            method: "POST",
-            headers: { "content-type": "application/json", authorization: `Bearer ${this.opts.apiKey}` },
+          res = await f(joinUrl(this.opts.baseUrl, 'embeddings'), {
+            method: 'POST',
+            headers: {
+              'content-type': 'application/json',
+              authorization: `Bearer ${this.opts.apiKey}`,
+            },
             body: JSON.stringify({ model: this.model, input, dimensions: this.dimensions }),
             signal: timeoutSignal(this.opts.timeoutMs, signal),
           });
@@ -71,15 +77,23 @@ export class OpenAICompatibleEmbeddings implements EmbeddingProvider {
           throw networkError(this.name, err);
         }
         if (!res.ok) throw await toProviderError(this.name, res);
-        const json = (await res.json()) as { data?: { embedding: number[]; index?: number }[]; usage?: { prompt_tokens?: number } };
+        const json = (await res.json()) as {
+          data?: { embedding: number[]; index?: number }[];
+          usage?: { prompt_tokens?: number };
+        };
         const data = [...(json.data ?? [])].sort((a, b) => (a.index ?? 0) - (b.index ?? 0));
-        if (data.length !== input.length) throw new ProviderError(`${this.name} returned ${data.length} embeddings for ${input.length} inputs`, this.name, { retryable: false });
+        if (data.length !== input.length)
+          throw new ProviderError(
+            `${this.name} returned ${data.length} embeddings for ${input.length} inputs`,
+            this.name,
+            { retryable: false }
+          );
         const vectors = data.map((d) => {
           if (d.embedding.length !== this.dimensions)
             throw new ProviderError(
               `${this.name}/${this.model} returned ${d.embedding.length}-dim vectors, expected ${this.dimensions}. Choose a model that supports the 'dimensions' parameter.`,
               this.name,
-              { retryable: false },
+              { retryable: false }
             );
           return l2normalize(d.embedding);
         });
@@ -92,9 +106,16 @@ export class OpenAICompatibleEmbeddings implements EmbeddingProvider {
       } catch (err) {
         lastErr = err instanceof ProviderError ? err : networkError(this.name, err);
         if (!lastErr.retryable || attempt === this.opts.maxRetries) throw lastErr;
-        await sleep(backoffDelay(attempt, { baseDelayMs: 1000, maxDelayMs: 15_000, random: Math.random, retryAfterMs: lastErr.retryAfterMs }));
+        await sleep(
+          backoffDelay(attempt, {
+            baseDelayMs: 1000,
+            maxDelayMs: 15_000,
+            random: Math.random,
+            retryAfterMs: lastErr.retryAfterMs,
+          })
+        );
       }
     }
-    throw lastErr ?? new ProviderError("embedding failed", this.name, { retryable: false });
+    throw lastErr ?? new ProviderError('embedding failed', this.name, { retryable: false });
   }
 }

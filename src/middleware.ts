@@ -1,4 +1,6 @@
-import { NextResponse, type NextRequest } from "next/server";
+import type { NextRequest } from 'next/server';
+
+import { NextResponse } from 'next/server';
 
 /**
  * Cheap edge check: unauthenticated visitors are redirected away from the dashboard before
@@ -6,13 +8,13 @@ import { NextResponse, type NextRequest } from "next/server";
  * actions (see server/auth/session.ts) — a forged cookie gets nowhere.
  */
 export function middleware(req: NextRequest) {
-  if (!req.cookies.get("docsbot_session")?.value) {
+  if (!req.cookies.get('docsbot_session')?.value) {
     const url = req.nextUrl.clone();
-    url.pathname = "/login";
+    url.pathname = '/login';
     url.search = `?next=${encodeURIComponent(req.nextUrl.pathname)}`;
     return NextResponse.redirect(url);
   }
   return NextResponse.next();
 }
 
-export const config = { matcher: ["/dashboard/:path*"] };
+export const config = { matcher: ['/dashboard/:path*'] };

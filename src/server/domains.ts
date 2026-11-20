@@ -6,10 +6,11 @@
 export function normalizeDomainEntry(raw: string): string | undefined {
   let v = raw.trim().toLowerCase();
   if (!v) return undefined;
-  v = v.replace(/^[a-z]+:\/\//, "").replace(/\/.*$/, "");
-  const wildcard = v.startsWith("*.");
+  v = v.replace(/^[a-z]+:\/\//, '').replace(/\/.*$/, '');
+  const wildcard = v.startsWith('*.');
   const host = wildcard ? v.slice(2) : v;
-  if (!/^[a-z0-9.-]+(:\d{1,5})?$/.test(host) || host.startsWith(".") || host.includes("..")) return undefined;
+  if (!/^[a-z0-9.-]+(:\d{1,5})?$/.test(host) || host.startsWith('.') || host.includes('..'))
+    return undefined;
   return wildcard ? `*.${host}` : host;
 }
 
@@ -38,23 +39,24 @@ export function isOriginAllowed(origin: string | null | undefined, allowed: stri
   const host = url.hostname.toLowerCase();
   const hostPort = url.host.toLowerCase();
   return allowed.some((entry) => {
-    if (entry.startsWith("*.")) {
+    if (entry.startsWith('*.')) {
       const base = entry.slice(2);
-      return host === base || host.endsWith("." + base);
+      return host === base || host.endsWith('.' + base);
     }
-    return entry.includes(":") ? hostPort === entry : host === entry || host === `www.${entry}`;
+    return entry.includes(':') ? hostPort === entry : host === entry || host === `www.${entry}`;
   });
 }
 
 /** CSP frame-ancestors value enforced by the browser on the widget iframe. */
 export function frameAncestors(allowed: string[]): string {
-  if (allowed.length === 0) return "frame-ancestors *";
+  if (allowed.length === 0) return 'frame-ancestors *';
   const sources = new Set<string>(["'self'"]);
   for (const entry of allowed) {
-    for (const scheme of ["https", "http"]) {
+    for (const scheme of ['https', 'http']) {
       sources.add(`${scheme}://${entry}`);
-      if (!entry.startsWith("*.") && !entry.includes(":") && !entry.startsWith("www.")) sources.add(`${scheme}://www.${entry}`);
+      if (!entry.startsWith('*.') && !entry.includes(':') && !entry.startsWith('www.'))
+        sources.add(`${scheme}://www.${entry}`);
     }
   }
-  return `frame-ancestors ${[...sources].join(" ")}`;
+  return `frame-ancestors ${[...sources].join(' ')}`;
 }

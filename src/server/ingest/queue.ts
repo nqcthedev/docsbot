@@ -1,19 +1,21 @@
-import { getDb } from "../db";
-import { env } from "../env";
-import { registry } from "../ai/registry";
-import { ProviderError } from "../ai/types";
-import { logger } from "../logger";
-import { claimNextSource, IngestError, ingestSource, markSourceFailed } from "./pipeline";
-import { BlockedUrlError } from "./url-guard";
+import { env } from 'src/server/env';
+import { getDb } from 'src/server/db';
+import { logger } from 'src/server/logger';
+import { registry } from 'src/server/ai/registry';
+import { ProviderError } from 'src/server/ai/types';
 
-const KEY = Symbol.for("docsbot.ingestDrain");
-const AGAIN = Symbol.for("docsbot.ingestDrainAgain");
+import { BlockedUrlError } from './url-guard';
+import { IngestError, ingestSource, claimNextSource, markSourceFailed } from './pipeline';
+
+const KEY = Symbol.for('docsbot.ingestDrain');
+const AGAIN = Symbol.for('docsbot.ingestDrainAgain');
 type G = typeof globalThis & { [KEY]?: Promise<number>; [AGAIN]?: boolean };
 
 function userFacingError(err: unknown): string {
   if (err instanceof IngestError || err instanceof BlockedUrlError) return err.message;
-  if (err instanceof ProviderError) return `Embedding provider error (${err.provider}${err.status ? ` ${err.status}` : ""}). Please retry the sync.`;
-  return "Unexpected error while processing this source. Please retry the sync.";
+  if (err instanceof ProviderError)
+    return `Embedding provider error (${err.provider}${err.status ? ` ${err.status}` : ''}). Please retry the sync.`;
+  return 'Unexpected error while processing this source. Please retry the sync.';
 }
 
 async function drain(maxJobs: number): Promise<number> {
@@ -26,7 +28,11 @@ async function drain(maxJobs: number): Promise<number> {
     if (!id) break;
     processed++;
     if (!embeddings) {
-      await markSourceFailed(db, id, "No embedding provider configured (set GEMINI_API_KEY or OPENAI_API_KEY).");
+      await markSourceFailed(
+        db,
+        id,
+        'No embedding provider configured (set GEMINI_API_KEY or OPENAI_API_KEY).'
+      );
       continue;
     }
     try {
@@ -39,7 +45,7 @@ async function drain(maxJobs: number): Promise<number> {
         logger,
       });
     } catch (err) {
-      logger.error("ingestion failed", { sourceId: id, err });
+      logger.error('ingestion failed', { sourceId: id, err });
       await markSourceFailed(db, id, userFacingError(err));
     }
   }
@@ -62,7 +68,7 @@ export function drainIngestQueue(maxJobs = 20): Promise<number> {
     do {
       g[AGAIN] = false;
       total += await drain(maxJobs).catch((err) => {
-        logger.error("ingest queue drain crashed", { err });
+        logger.error('ingest queue drain crashed', { err });
         return 0;
       });
     } while (g[AGAIN]);

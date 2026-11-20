@@ -6,14 +6,19 @@
 export type CitationRef = { n: number; title: string; url: string | null; page: number | null };
 
 export function escapeHtml(s: string): string {
-  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 
 function safeUrl(url: string | null): string | null {
   if (!url) return null;
   try {
     const u = new URL(url);
-    return u.protocol === "http:" || u.protocol === "https:" ? u.toString() : null;
+    return u.protocol === 'http:' || u.protocol === 'https:' ? u.toString() : null;
   } catch {
     return null;
   }
@@ -25,12 +30,12 @@ export function citationLabel(c: CitationRef): string {
 
 function inline(text: string, cites: Map<number, CitationRef>): string {
   let out = escapeHtml(text);
-  out = out.replace(/`([^`]+)`/g, "<code>$1</code>");
-  out = out.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
-  out = out.replace(/(^|[\s(])\*([^*\s][^*]*)\*/g, "$1<em>$2</em>");
+  out = out.replace(/`([^`]+)`/g, '<code>$1</code>');
+  out = out.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+  out = out.replace(/(^|[\s(])\*([^*\s][^*]*)\*/g, '$1<em>$2</em>');
   out = out.replace(/\[(\d{1,2})\]/g, (all, n: string) => {
     const c = cites.get(Number(n));
-    if (!c) return "";
+    if (!c) return '';
     const title = escapeHtml(citationLabel(c));
     const url = safeUrl(c.url);
     return url
@@ -42,17 +47,20 @@ function inline(text: string, cites: Map<number, CitationRef>): string {
 
 export function renderMarkdown(text: string, citations: CitationRef[] = []): string {
   const cites = new Map(citations.map((c) => [c.n, c]));
-  const lines = text.replace(/\r/g, "").split("\n");
+  const lines = text.replace(/\r/g, '').split('\n');
   const html: string[] = [];
-  let list: { type: "ul" | "ol"; items: string[] } | undefined;
+  let list: { type: 'ul' | 'ol'; items: string[] } | undefined;
   let para: string[] = [];
 
   const flushPara = () => {
-    if (para.length) html.push(`<p>${para.map((l) => inline(l, cites)).join("<br>")}</p>`);
+    if (para.length) html.push(`<p>${para.map((l) => inline(l, cites)).join('<br>')}</p>`);
     para = [];
   };
   const flushList = () => {
-    if (list) html.push(`<${list.type}>${list.items.map((i) => `<li>${inline(i, cites)}</li>`).join("")}</${list.type}>`);
+    if (list)
+      html.push(
+        `<${list.type}>${list.items.map((i) => `<li>${inline(i, cites)}</li>`).join('')}</${list.type}>`
+      );
     list = undefined;
   };
 
@@ -66,7 +74,7 @@ export function renderMarkdown(text: string, citations: CitationRef[] = []): str
       flushList();
     } else if (bullet || numbered) {
       flushPara();
-      const type = bullet ? "ul" : "ol";
+      const type = bullet ? 'ul' : 'ol';
       if (!list || list.type !== type) {
         flushList();
         list = { type, items: [] };
@@ -83,5 +91,5 @@ export function renderMarkdown(text: string, citations: CitationRef[] = []): str
   }
   flushPara();
   flushList();
-  return html.join("");
+  return html.join('');
 }
